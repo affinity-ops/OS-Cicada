@@ -1,0 +1,55 @@
+@import "tailwindcss";
+@plugin "@tailwindcss/typography";
+
+@theme {
+  --sidebar-width: 18rem;
+  --color-surface-variant: #262626;
+  --color-primary-container: #fd8b00;
+  --color-on-surface: #ffffff;
+  --color-tertiary: #ffc479;
+  --color-surface-tint: #ff9f4a;
+  --color-secondary: #f9c13d;
+  --color-on-surface-variant: #adaaaa;
+  --color-background: #0e0e0e;
+  --color-primary-fixed: #fd8b00;
+  --color-surface: #0e0e0e;
+  --color-primary: #ff9f4a;
+  --color-surface-container: #1a1a1a;
+  --color-surface-container-low: #131313;
+  --color-surface-container-highest: #262626;
+  --color-error: #ff7351;
+  --font-headline: "Space Grotesk", sans-serif;
+  --font-body: "Manrope", sans-serif;
+  --font-technical: "JetBrains Mono", monospace;
+}
+
+body {
+  font-family: var(--font-body);
+  background-color: var(--color-background);
+  color: var(--color-on-surface);
+}
+
+h1, h2, h3, h4, .font-headline {
+  font-family: var(--font-headline);
+}
+
+.font-mono, .font-technical {
+  font-family: var(--font-technical);
+}
+
+.glass-panel {
+    background: rgba(38, 38, 38, 0.6);
+    backdrop-filter: blur(20px);
+}
+
+.glow-active {
+    box-shadow: 0 0 32px 0 rgba(255, 159, 74, 0.1);
+}
+
+.glow-hover:hover {
+    box-shadow: 0 0 40px 0 rgba(255, 159, 74, 0.15);
+}
+
+.btn-gradient {
+    background: linear-gradient(135deg, #ff9f4a 0%, #fd8b00 100%);
+}

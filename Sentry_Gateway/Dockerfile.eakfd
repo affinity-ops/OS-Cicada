@@ -1,0 +1,46 @@
+# © 2026 Affinity Ops Ltd.
+# SPDX-License-Identifier: Apache-2.0
+
+# Dockerfile.eakfd — Ephemeral Agent Kernel Firewall daemon
+#
+# This container runs under gVisor (runtime: runsc) or Kata Containers
+# (runtimeClassName: kata) to provide user-space kernel isolation for
+# all code execution requests.
+#
+# The daemon communicates with the Sentry Gateway over a UNIX Domain
+# Socket — no TCP ports are exposed.
+#
+# Build:  docker build -f Dockerfile.eakfd -t cicada/eakfd .
+# Run:    See docker-compose.yml (runtime: runsc)
+
+FROM golang:1.25-alpine AS builder
+
+WORKDIR /build
+COPY go.mod go.sum ./
+RUN go mod download
+COPY . .
+
+# Build eakfd daemon
+RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /eakfd ./cmd/eakfd
+
+# Install grpc_health_probe for container health checks
+RUN go install github.com/grpc-ecosystem/grpc-health-probe@latest
+
+# --- Runtime stage ---
+FROM alpine:3.20
+
+# Install runtime binaries that agents may request
+RUN apk add --no-cache python3 bash nodejs
+
+# Copy binaries
+COPY --from=builder /eakfd /usr/local/bin/eakfd
+COPY --from=builder /go/bin/grpc_health_probe /usr/local/bin/grpc_health_probe
+
+# Socket directory — shared with sentry-gateway via Docker volume
+RUN mkdir -p /var/run/cicada && chmod 0750 /var/run/cicada
+
+# Non-root execution
+RUN addgroup -S cicada && adduser -S eakfd -G cicada
+USER eakfd
+
+ENTRYPOINT ["eakfd"]

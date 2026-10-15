@@ -1,0 +1,6 @@
+{
+  "ed25519_public_key": "GENERATE_WITH_MINT_INIT",
+  "ed25519_private_key": "NEVER_COMMIT_PRIVATE_KEY",
+  "mldsa65_public_key": "GENERATE_WITH_MINT_INIT",
+  "mldsa65_private_key": "NEVER_COMMIT_PRIVATE_KEY"
+}

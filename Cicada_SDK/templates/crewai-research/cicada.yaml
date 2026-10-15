@@ -1,0 +1,71 @@
+# © 2026 Affinity Ops Ltd. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+# cicada.yaml — Cicada Agent Governance Policy
+# Template: CrewAI Research Team
+# Risk Level: Medium (web scraping, document retrieval, content provenance)
+
+apiVersion: cicada/v1
+kind: AgentPolicy
+
+identity:
+  name: "research-analyst-crew"
+  description: "Multi-agent research team that retrieves information from web sources, analyzes documents, and produces research reports. Content provenance tagging is enabled to defend against IPI in retrieved documents."
+  type: semi-autonomous
+  role: retriever
+  owner: research-team@acme.com
+  business_unit: research
+  data_classification: internal
+  criticality: medium
+
+tools:
+  - name: web-search
+    description: "Search the web for information using SerpAPI"
+    url_patterns:
+      - "https://serpapi.com/search*"
+    methods: [GET]
+    risk_level: low
+
+  - name: web-scrape
+    description: "Scrape web pages for content analysis"
+    url_patterns:
+      - "https://*"
+    methods: [GET]
+    risk_level: medium
+
+  - name: document-store
+    description: "Store and retrieve documents from internal vector database"
+    url_patterns:
+      - "https://api.internal.acme.com/v1/documents/*"
+    methods: [GET, POST]
+    risk_level: medium
+
+  - name: report-generator
+    description: "Generate formatted research reports"
+    url_patterns:
+      - "https://api.internal.acme.com/v1/reports/*"
+    methods: [POST]
+    risk_level: low
+
+enforcement:
+  velocity:
+    max_reads_per_minute: 120
+    max_writes_per_minute: 30
+    max_deletes_per_minute: 0
+    circuit_breaker_threshold: 10
+  hitl:
+    enabled: false
+    timeout_seconds: 3600
+    auto_deny_on_timeout: true
+    risk_threshold: 0.7
+  shadow_mode: false
+  destructive_capability: false
+
+provenance:
+  evar_binding: true
+  content_tagging: true  # Critical for research agents — tags all retrieved content
+  audit_retention_days: 365
+
+compliance:
+  frameworks: [SOC2, GDPR]
+  regulatory_region: GLOBAL

@@ -1,0 +1,278 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://cicada.dev/schema/cicada-policy-v1.json",
+  "title": "Cicada Agent Policy",
+  "description": "Declarative governance policy for AI agents managed by the Cicada platform. This schema defines the structure of cicada.yaml — the policy-as-code file that the Sentry Gateway consumes at agent registration time.",
+  "type": "object",
+  "required": ["apiVersion", "kind", "identity", "tools", "enforcement"],
+  "additionalProperties": false,
+  "properties": {
+    "apiVersion": {
+      "type": "string",
+      "enum": ["cicada/v1"],
+      "description": "Schema version. Must be 'cicada/v1' for this schema version."
+    },
+    "kind": {
+      "type": "string",
+      "enum": ["AgentPolicy"],
+      "description": "Resource type. Must be 'AgentPolicy'."
+    },
+    "identity": {
+      "type": "object",
+      "description": "Agent identity metadata. Used for registration, audit attribution, and semantic intent alignment.",
+      "required": ["name", "type", "role", "owner"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 128,
+          "pattern": "^[a-z0-9][a-z0-9\\-_]{2,127}$",
+          "description": "Agent name. Lowercase alphanumeric with hyphens/underscores. Used as the agent's display name and in log attribution."
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 1024,
+          "description": "Plain-language description of the agent's purpose. Used by the Dual-Tier Semantic Intent Engine (Layer 3) to compute embedding alignment scores against target URLs. A precise description improves semantic scoring accuracy and reduces false positives."
+        },
+        "type": {
+          "type": "string",
+          "enum": ["autonomous", "semi-autonomous", "supervised", "orchestrator", "sub-agent"],
+          "description": "Agent autonomy classification. Affects default enforcement thresholds: 'autonomous' agents receive stricter velocity limits and lower HITL thresholds than 'supervised' agents."
+        },
+        "role": {
+          "type": "string",
+          "enum": ["processor", "retriever", "generator", "orchestrator", "monitor", "executor"],
+          "description": "Agent functional role. Used for Role-Based Access Control (RBAC) and scope entitlement defaults."
+        },
+        "owner": {
+          "type": "string",
+          "format": "email",
+          "description": "Email of the agent owner (developer or team). Bound to the agent's identity in the audit ledger."
+        },
+        "business_unit": {
+          "type": "string",
+          "maxLength": 64,
+          "description": "Business unit or department the agent belongs to. Used for tenant-scoped reporting and cost allocation."
+        },
+        "data_classification": {
+          "type": "string",
+          "enum": ["public", "internal", "confidential", "restricted"],
+          "description": "Data sensitivity classification. Affects output control sensitivity and PII scanning thresholds."
+        },
+        "criticality": {
+          "type": "string",
+          "enum": ["low", "medium", "high", "critical"],
+          "description": "Operational criticality. 'high' and 'critical' agents receive mandatory HITL for destructive operations."
+        }
+      }
+    },
+    "tools": {
+      "type": "array",
+      "description": "Declared tool list. Every tool the agent is permitted to call must be declared here. Calls to undeclared tools are blocked by Layer 4 (Resource Policy). Each tool declares a skill contract defining structural payload constraints, upstream delegation permissions, and criticality-driven CIBA thresholds.",
+      "items": {
+        "type": "object",
+        "required": ["name", "url_patterns", "methods"],
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 64,
+            "description": "Human-readable tool name for audit logging and dashboard display."
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 512,
+            "description": "Tool purpose description. Used by semantic intent alignment to verify that the tool's purpose aligns with the agent's declared mission."
+          },
+          "url_patterns": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "description": "URL patterns the agent is permitted to call. Supports wildcards (*). Example: 'https://api.stripe.com/v1/charges/*'. The Sentry Gateway's URL allowlist is populated from these patterns."
+          },
+          "methods": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"]
+            },
+            "minItems": 1,
+            "description": "Allowed HTTP methods for this tool. A GET-only declaration prevents the agent from writing to the target API even if the URL is allowlisted."
+          },
+          "destructive": {
+            "type": "boolean",
+            "default": false,
+            "description": "Whether this tool has destructive capabilities (DELETE methods, shell execution, filesystem writes, database DDL). Setting this to true enforces mandatory HITL for write operations involving this tool."
+          },
+          "risk_level": {
+            "type": "string",
+            "enum": ["low", "medium", "high", "critical"],
+            "default": "medium",
+            "description": "Risk classification for this tool. Affects HITL escalation thresholds and velocity limit defaults."
+          },
+          "input_schema": {
+            "type": "object",
+            "description": "JSON Schema definition constraining the request payload structure for this tool. The Sentry Gateway validates inbound request bodies against this schema at Layer 1d (Skill Routing). Malformed or mutated payloads are rejected before reaching the target API."
+          },
+          "allowed_upstreams": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "List of agent IDs permitted to invoke this tool via delegation (X-Cicada-Agent-Chain). When set, only agents in this list may trigger this capability through inter-agent delegation. Empty array or omission means any authorised agent may invoke."
+          },
+          "criticality_level": {
+            "type": "string",
+            "enum": ["low", "medium", "high"],
+            "default": "low",
+            "description": "Per-tool criticality classification. 'high' criticality tools trigger mandatory CIBA human-in-the-loop approval when the MEF risk score exceeds 0.4, regardless of the agent's global HITL configuration."
+          }
+        }
+      }
+    },
+    "enforcement": {
+      "type": "object",
+      "description": "Enforcement configuration for the seven-layer pipeline.",
+      "additionalProperties": false,
+      "properties": {
+        "velocity": {
+          "type": "object",
+          "description": "Velocity limits enforced by Layer 5 (Circuit Breaker). Values are per-agent, enforced via Redis counters.",
+          "additionalProperties": false,
+          "properties": {
+            "max_reads_per_minute": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 10000,
+              "default": 100,
+              "description": "Maximum GET/HEAD requests per minute."
+            },
+            "max_writes_per_minute": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000,
+              "default": 20,
+              "description": "Maximum POST/PUT/PATCH requests per minute."
+            },
+            "max_deletes_per_minute": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 100,
+              "default": 5,
+              "description": "Maximum DELETE requests per minute. Set to 0 to block all deletes."
+            },
+            "circuit_breaker_threshold": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 10,
+              "description": "Number of consecutive failures before the circuit breaker opens and blocks all traffic from this agent."
+            }
+          }
+        },
+        "hitl": {
+          "type": "object",
+          "description": "Human-in-the-loop configuration for Layer 7.",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "default": false,
+              "description": "Whether HITL approval is required for write operations. Mandatory for agents with destructive capabilities."
+            },
+            "webhook_url": {
+              "type": "string",
+              "format": "uri",
+              "description": "Webhook URL for human approval notifications. Receives an encrypted vault payload with the pending action details."
+            },
+            "timeout_seconds": {
+              "type": "integer",
+              "minimum": 60,
+              "maximum": 86400,
+              "default": 3600,
+              "description": "Maximum time to wait for human approval before auto-deny."
+            },
+            "auto_deny_on_timeout": {
+              "type": "boolean",
+              "default": true,
+              "description": "Whether to auto-deny when the timeout expires. If false, the action remains suspended indefinitely."
+            },
+            "risk_threshold": {
+              "type": "number",
+              "minimum": 0.0,
+              "maximum": 1.0,
+              "default": 0.6,
+              "description": "Minimum risk score that triggers HITL escalation. Actions below this threshold are approved automatically (Tier 1 pre-check)."
+            }
+          }
+        },
+        "shadow_mode": {
+          "type": "boolean",
+          "default": false,
+          "description": "When true, the agent operates in observe-only mode. All seven layers are computed and logged, but no traffic is blocked. Use this to establish behavioural baselines before activating enforcement."
+        },
+        "destructive_capability": {
+          "type": "boolean",
+          "default": false,
+          "description": "Whether this agent has access to destructive tools (shell, filesystem, DDL). When true, HITL is mandatory for write operations. This flag is also set automatically if any tool in the tools array has destructive=true."
+        }
+      }
+    },
+    "provenance": {
+      "type": "object",
+      "description": "Content provenance and integrity configuration.",
+      "additionalProperties": false,
+      "properties": {
+        "evar_binding": {
+          "type": "boolean",
+          "default": true,
+          "description": "Whether to bind EVAR identity to all agent outputs for tamper-evident audit trails."
+        },
+        "content_tagging": {
+          "type": "boolean",
+          "default": false,
+          "description": "Whether to auto-tag retrieved content with X-Cicada-Content-Provenance headers. When enabled, the SDK automatically marks RAG pipeline outputs as 'retrieved' provenance, triggering elevated scan sensitivity at the Gateway."
+        },
+        "audit_retention_days": {
+          "type": "integer",
+          "minimum": 30,
+          "maximum": 3650,
+          "default": 365,
+          "description": "Number of days to retain audit records for this agent in the action ledger."
+        }
+      }
+    },
+    "compliance": {
+      "type": "object",
+      "description": "Compliance and regulatory configuration.",
+      "additionalProperties": false,
+      "properties": {
+        "frameworks": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": ["SOC2", "GDPR", "ISO27001", "HIPAA", "PCI-DSS", "FedRAMP", "NIST-800-53"]
+          },
+          "description": "Compliance frameworks this agent must adhere to. Affects data retention, PII scanning sensitivity, and audit export formats."
+        },
+        "regulatory_region": {
+          "type": "string",
+          "enum": ["US", "EU", "UK", "APAC", "GLOBAL"],
+          "description": "Primary regulatory jurisdiction. Affects data residency constraints and PII detection patterns (e.g. UK NINO vs US SSN)."
+        },
+        "budget_cap_usd": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Maximum budget this agent may spend across all tool calls in the current billing period. Enforced by the billing meter."
+        },
+        "cost_centre": {
+          "type": "string",
+          "maxLength": 64,
+          "description": "Cost centre code for enterprise billing allocation."
+        }
+      }
+    }
+  }
+}

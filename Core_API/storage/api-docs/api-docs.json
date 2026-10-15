@@ -1,0 +1,364 @@
+{
+    "openapi": "3.0.0",
+    "info": {
+        "title": "Cicada Core API",
+        "description": "Secure API for the Cicada Agent Infrastructure.",
+        "contact": {
+            "email": "support@cicada.ai"
+        },
+        "version": "1.0.0"
+    },
+    "servers": [
+        {
+            "url": "http://localhost:8000",
+            "description": "Local API Server"
+        }
+    ],
+    "paths": {
+        "/api/v1/agents/{id}/profile": {
+            "get": {
+                "tags": [
+                    "Agents"
+                ],
+                "summary": "Get Agent Governance Profile",
+                "description": "Returns the full compliance profile and runtime telemetry of an agent.",
+                "operationId": "968af3e3b12bc7d205d886a6d7b88064",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "description": "UUID of the agent",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    },
+                    {
+                        "name": "cursor",
+                        "in": "query",
+                        "description": "Pagination cursor for the timeline",
+                        "required": false,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Agent governance profile returned successfully"
+                    },
+                    "404": {
+                        "description": "Agent not found"
+                    }
+                }
+            }
+        },
+        "/api/v1/admin/alert-rules": {
+            "get": {
+                "tags": [
+                    "Alerts"
+                ],
+                "summary": "List alert rules",
+                "description": "Returns all operator-configured alert rules.",
+                "operationId": "1d6437e1ec5a0a4d4556432ef67008a9",
+                "responses": {
+                    "200": {
+                        "description": "Success"
+                    }
+                }
+            },
+            "post": {
+                "tags": [
+                    "Alerts"
+                ],
+                "summary": "Create an alert rule",
+                "operationId": "70725730f0ae974e763ab5d0653ca989",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "properties": {
+                                    "event_type": {
+                                        "type": "string"
+                                    },
+                                    "channel": {
+                                        "type": "string",
+                                        "enum": [
+                                            "email",
+                                            "webhook",
+                                            "aegis"
+                                        ]
+                                    },
+                                    "destination": {
+                                        "type": "string"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "Rule created"
+                    }
+                }
+            }
+        },
+        "/api/v1/admin/alert-rules/{id}": {
+            "delete": {
+                "tags": [
+                    "Alerts"
+                ],
+                "summary": "Delete an alert rule",
+                "operationId": "c384d3d949bed6f8a7375263ae8ab4cf",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Rule deleted"
+                    }
+                }
+            },
+            "patch": {
+                "tags": [
+                    "Alerts"
+                ],
+                "summary": "Toggle an alert rule",
+                "operationId": "1b7cdeb5ced1d046ba753e0424dbc642",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Rule toggled"
+                    }
+                }
+            }
+        },
+        "/api/v1/agents/biographies": {
+            "get": {
+                "tags": [
+                    "Agents"
+                ],
+                "summary": "List agent biographies",
+                "description": "Paginated list of all agents with summary data for listing cards.",
+                "operationId": "7ae0a673f99d92fb8a7300513dacb243",
+                "parameters": [
+                    {
+                        "name": "per_page",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "integer",
+                            "default": 24
+                        }
+                    },
+                    {
+                        "name": "trust_tier",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "search",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Success"
+                    }
+                }
+            }
+        },
+        "/api/v1/agents/{id}/quarantine": {
+            "post": {
+                "tags": [
+                    "Governance"
+                ],
+                "summary": "Quarantine an agent",
+                "description": "Hard-stop: sets revoked_at and logs a circuit breaker trip event.",
+                "operationId": "dee71bd7e1878c249c98ed7a55c68fe3",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Agent quarantined"
+                    }
+                }
+            }
+        },
+        "/api/v1/agents/{id}/biography": {
+            "get": {
+                "tags": [
+                    "Agents"
+                ],
+                "summary": "Get full agent biography",
+                "description": "Returns every piece of data the platform holds about one agent (seven sections).",
+                "operationId": "70f8824c0305c841e205b13eb6bbae65",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Success"
+                    }
+                }
+            }
+        },
+        "/api/v1/agents/{id}/timeline": {
+            "get": {
+                "tags": [
+                    "Agents"
+                ],
+                "summary": "Agent timeline",
+                "description": "Paginated chronological event feed for infinite-scroll biography timeline.",
+                "operationId": "d8fe2c1fa78b8b95d23ed3caa3a7f936",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    },
+                    {
+                        "name": "limit",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "integer",
+                            "default": 50
+                        }
+                    },
+                    {
+                        "name": "cursor",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Success"
+                    }
+                }
+            }
+        },
+        "/api/v1/admin/hitl/{traceId}/approve": {
+            "post": {
+                "tags": [
+                    "Governance"
+                ],
+                "summary": "Approve a blocked Human-in-the-Loop action",
+                "description": "Operator overrides a swarm block and approves the action for execution.",
+                "operationId": "8a728ef18651bc8cdcadeb0b28d5746c",
+                "parameters": [
+                    {
+                        "name": "traceId",
+                        "in": "path",
+                        "description": "UUID of the trace to approve",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Action approved successfully"
+                    }
+                }
+            }
+        },
+        "/api/v1/admin/hitl/{traceId}/reject": {
+            "post": {
+                "tags": [
+                    "Governance"
+                ],
+                "summary": "Reject a blocked Human-in-the-Loop action",
+                "description": "Operator denies a swarm block permanently, enforcing the block.",
+                "operationId": "7a5ea7519d73eee18075ef76eaab4db0",
+                "parameters": [
+                    {
+                        "name": "traceId",
+                        "in": "path",
+                        "description": "UUID of the trace to reject",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Action rejected successfully"
+                    }
+                }
+            }
+        }
+    },
+    "tags": [
+        {
+            "name": "Agents",
+            "description": "Agents"
+        },
+        {
+            "name": "Alerts",
+            "description": "Alerts"
+        },
+        {
+            "name": "Governance",
+            "description": "Governance"
+        }
+    ]
+}

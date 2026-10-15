@@ -1,0 +1,150 @@
+# © 2026 Affinity Ops Ltd. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+openapi: 3.0.0
+info:
+  title: AGWv2 Epistemic Logic Contracts
+  version: "1.0.0"
+  description: Explicit input/output contracts defining the state of AGWv2 epistemic verification primitives across the Cicada Go and Python enforcement services.
+
+paths:
+  /evar/issue:
+    summary: Generates the Identity Token (EVAR)
+    description: Deterministically hashes author credentials into an immutable identifier.
+    post:
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                author_name: 
+                  type: string
+                qualifications: 
+                  type: array
+                  items: 
+                    type: string
+                affiliation: 
+                  type: string
+      responses:
+        '200':
+          description: A signed EVAR JWT
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  evar_id: 
+                    type: string
+                    description: "Cryptographic identifier hash (e.g., evr_8x99...)"
+                  token: 
+                    type: string
+                    description: "Ed25519 signed JWT asserting identity"
+
+  /shield/evaluate:
+    summary: Pre-Generation Alignment Shield
+    description: 3-Layer API search evaluating topic against institutional ground truth producing a factual ledger.
+    post:
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                agent_topic_intent: 
+                  type: string
+      responses:
+        '200':
+          description: Trust Score & Numerical Data
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  composite_confidence_score: 
+                    type: integer
+                    minimum: 0
+                    maximum: 100
+                  tier_routing: 
+                    type: string
+                    enum: [Tier 1, Tier 2, Tier 3]
+                  factual_ledger: 
+                    type: array
+                    description: "Extracted dates, currencies, stats to constrain prompt"
+                    items:
+                      type: string
+
+  /adversarial/audit:
+    summary: 5-Point Adversarial Editor Challenge
+    description: Stress-tests a generated payload against epistemic frailties.
+    post:
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                content_payload: 
+                  type: string
+                advocacy_slider: 
+                  type: integer
+                  minimum: 0
+                  maximum: 100
+                  description: "0 = Max Challenge, 100 = Max Preservation"
+      responses:
+        '200':
+          description: Adversarial Findings Report
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  pass_status: 
+                    type: boolean
+                  findings: 
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        failure_type: 
+                          type: string
+                          enum: [Causal Overreach, Missing Variables, Bias, Certainty, Alternative Explanations]
+                        description: 
+                          type: string
+
+  /cic/generate:
+    summary: 4-Layer Content Integrity Certificate
+    description: Binds the outputs of EVAR, Shield, and Adversarial Passes into a 4-Layer JSON-LD Payload.
+    post:
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                evar_id: 
+                  type: string
+                content_payload: 
+                  type: string
+                shield_log: 
+                  type: object
+                adversarial_log: 
+                  type: object
+      responses:
+        '200':
+          description: Full Pipeline JSON-LD Manifest
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  layer_2_hash: 
+                    type: string
+                    description: "SHA-256 of the payload"
+                  json_ld_schema: 
+                    type: string
+                    description: "The formatted JSON-LD string ready for injection"

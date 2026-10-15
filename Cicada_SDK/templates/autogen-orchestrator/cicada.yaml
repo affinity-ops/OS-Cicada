@@ -1,0 +1,76 @@
+# © 2026 Affinity Ops Ltd. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+# cicada.yaml — Cicada Agent Governance Policy
+# Template: AutoGen Multi-Agent Orchestrator
+# Risk Level: High (orchestrator with sub-agents, multi-tier enforcement)
+
+apiVersion: cicada/v1
+kind: AgentPolicy
+
+identity:
+  name: "autogen-orchestrator"
+  description: "Multi-agent orchestration hub using AutoGen. Coordinates sub-agents for complex tasks including data analysis, code generation, and report writing. The orchestrator has elevated privileges and acts as the identity authority for its sub-agent pool."
+  type: orchestrator
+  role: orchestrator
+  owner: ai-platform-team@acme.com
+  business_unit: engineering
+  data_classification: confidential
+  criticality: high
+
+tools:
+  - name: code-executor
+    description: "Execute Python code in a sandboxed environment"
+    url_patterns:
+      - "https://api.internal.acme.com/v1/sandbox/execute"
+    methods: [POST]
+    destructive: false
+    risk_level: high
+
+  - name: data-warehouse
+    description: "Query the internal data warehouse for analysis"
+    url_patterns:
+      - "https://api.internal.acme.com/v1/warehouse/query"
+    methods: [POST]
+    risk_level: medium
+
+  - name: artifact-store
+    description: "Store and retrieve analysis artifacts (charts, reports)"
+    url_patterns:
+      - "https://api.internal.acme.com/v1/artifacts/*"
+    methods: [GET, POST, PUT]
+    risk_level: low
+
+  - name: external-apis
+    description: "Access external data sources for enrichment"
+    url_patterns:
+      - "https://api.worldbank.org/v2/*"
+      - "https://api.census.gov/*"
+    methods: [GET]
+    risk_level: low
+
+enforcement:
+  velocity:
+    max_reads_per_minute: 200   # Higher for orchestrators coordinating sub-agents
+    max_writes_per_minute: 50
+    max_deletes_per_minute: 0
+    circuit_breaker_threshold: 10
+  hitl:
+    enabled: true
+    webhook_url: "https://api.internal.acme.com/webhooks/cicada-hitl"
+    timeout_seconds: 3600
+    auto_deny_on_timeout: true
+    risk_threshold: 0.5
+  shadow_mode: false
+  destructive_capability: false
+
+provenance:
+  evar_binding: true
+  content_tagging: true
+  audit_retention_days: 730
+
+compliance:
+  frameworks: [SOC2, GDPR, ISO27001]
+  regulatory_region: GLOBAL
+  budget_cap_usd: 5000.00
+  cost_centre: "ENG-AI-2026"

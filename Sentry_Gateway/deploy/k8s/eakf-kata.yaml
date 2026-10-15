@@ -1,0 +1,130 @@
+# © 2026 Affinity Ops Ltd. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+# EAKF Kubernetes Manifests — Kata Containers / Firecracker (Enterprise Tier)
+#
+# This manifest deploys the eakfd daemon using Kata Containers, which
+# provides Firecracker-backed microVM isolation with hardware boundaries.
+# Each execution runs inside a lightweight virtual machine with its own
+# dedicated kernel — the strongest isolation tier available.
+#
+# Use this for:
+#   - Defence and national security deployments
+#   - Financial services (PCI-DSS, SOX compliance)
+#   - Healthcare (HIPAA compute isolation requirements)
+#   - Any deployment where container escape is an unacceptable risk
+#
+# Prerequisites:
+#   - Kata Containers runtime installed on cluster nodes
+#   - Hardware virtualization support (/dev/kvm available)
+#   - AWS: .metal instance types or bare-metal nodes
+#   - GCP: nested virtualization enabled on compute instances
+#
+# This is a drop-in replacement for eakf-gvisor.yaml.
+# The only change is runtimeClassName: kata instead of gvisor.
+
+---
+# RuntimeClass — registers Kata Containers as an available runtime
+apiVersion: node.k8s.io/v1
+kind: RuntimeClass
+metadata:
+  name: kata
+handler: kata-qemu
+overhead:
+  podFixed:
+    memory: "160Mi"                               # Firecracker VM overhead
+    cpu: "250m"
+scheduling:
+  nodeSelector:
+    kvm-enabled: "true"                           # Only schedule on KVM-capable nodes
+
+---
+# eakfd Deployment — Firecracker microVM isolation
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: eakfd
+  namespace: cicada
+  labels:
+    app.kubernetes.io/name: eakfd
+    app.kubernetes.io/component: sandbox
+    app.kubernetes.io/part-of: cicada
+    cicada.io/isolation-tier: enterprise
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: eakfd
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: eakfd
+        app.kubernetes.io/component: sandbox
+        cicada.io/isolation-tier: enterprise
+      annotations:
+        io.kata-containers.config.hypervisor.default_vcpus: "2"
+        io.kata-containers.config.hypervisor.default_memory: "1024"
+    spec:
+      runtimeClassName: kata                      # Firecracker microVM isolation
+      serviceAccountName: eakfd
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+      containers:
+        - name: eakfd
+          image: cicada/eakfd:latest
+          env:
+            - name: EAKF_SOCKET_PATH
+              value: /var/run/cicada/eakf.sock
+            - name: EAKF_ISOLATION_TIER
+              value: enterprise-firecracker
+          volumeMounts:
+            - name: eakf-socket
+              mountPath: /var/run/cicada
+            - name: tmp
+              mountPath: /tmp
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            requests:
+              cpu: 250m
+              memory: 256Mi
+            limits:
+              cpu: "4"
+              memory: 2Gi
+          readinessProbe:
+            exec:
+              command:
+                - grpc_health_probe
+                - -addr=unix:///var/run/cicada/eakf.sock
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            exec:
+              command:
+                - grpc_health_probe
+                - -addr=unix:///var/run/cicada/eakf.sock
+            initialDelaySeconds: 10
+            periodSeconds: 30
+      volumes:
+        - name: eakf-socket
+          emptyDir:
+            medium: Memory
+        - name: tmp
+          emptyDir:
+            sizeLimit: 512Mi
+
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: eakfd
+  namespace: cicada
+  labels:
+    app.kubernetes.io/name: eakfd
+    cicada.io/isolation-tier: enterprise

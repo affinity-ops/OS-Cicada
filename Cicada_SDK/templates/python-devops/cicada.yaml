@@ -1,0 +1,75 @@
+# © 2026 Affinity Ops Ltd. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+# cicada.yaml — Cicada Agent Governance Policy
+# Template: Python DevOps Agent
+# Risk Level: Critical (shell access, destructive capability, mandatory HITL)
+
+apiVersion: cicada/v1
+kind: AgentPolicy
+
+identity:
+  name: "devops-automation-agent"
+  description: "DevOps automation agent with shell access for infrastructure management. Executes deployment scripts, manages containers, and monitors system health. All destructive operations require human approval via HITL."
+  type: autonomous
+  role: executor
+  owner: devops-team@acme.com
+  business_unit: engineering
+  data_classification: restricted
+  criticality: critical
+
+tools:
+  - name: shell-executor
+    description: "Execute shell commands on managed infrastructure"
+    url_patterns:
+      - "https://api.internal.acme.com/v1/exec/*"
+    methods: [POST]
+    destructive: true
+    risk_level: critical
+
+  - name: container-manager
+    description: "Manage Docker containers (start, stop, restart, remove)"
+    url_patterns:
+      - "https://api.internal.acme.com/v1/containers/*"
+    methods: [GET, POST, PUT, DELETE]
+    destructive: true
+    risk_level: high
+
+  - name: monitoring-api
+    description: "Query system monitoring and health metrics"
+    url_patterns:
+      - "https://api.internal.acme.com/v1/monitoring/*"
+      - "https://api.datadog.com/api/v1/*"
+    methods: [GET]
+    risk_level: low
+
+  - name: github-deployments
+    description: "Trigger and manage GitHub deployments"
+    url_patterns:
+      - "https://api.github.com/repos/*/deployments*"
+    methods: [GET, POST]
+    risk_level: high
+
+enforcement:
+  velocity:
+    max_reads_per_minute: 60
+    max_writes_per_minute: 5    # Very low — destructive operations are slow and deliberate
+    max_deletes_per_minute: 1   # Maximum one delete per minute
+    circuit_breaker_threshold: 3
+  hitl:
+    enabled: true               # Mandatory for destructive agents
+    webhook_url: "https://api.internal.acme.com/webhooks/cicada-hitl"
+    timeout_seconds: 7200       # 2 hours — ops reviews may take time
+    auto_deny_on_timeout: true
+    risk_threshold: 0.3         # Very low threshold — almost everything gets reviewed
+  shadow_mode: false
+  destructive_capability: true
+
+provenance:
+  evar_binding: true
+  content_tagging: false
+  audit_retention_days: 1095   # 3 years for compliance
+
+compliance:
+  frameworks: [SOC2, ISO27001, NIST-800-53]
+  regulatory_region: GLOBAL

@@ -1,0 +1,40 @@
+{
+  "name": "@cicada/root",
+  "version": "1.0.0",
+  "private": true,
+  "packageManager": "npm@10.9.7",
+  "description": "Enterprise-grade cryptographic verification infrastructure for the agent economy.",
+  "workspaces": [
+    "dashboard",
+    "Developer_Portal",
+    "Gateway_Portal",
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev",
+    "lint": "turbo run lint",
+    "test": "turbo run test",
+    "test:e2e": "npx playwright test",
+    "test:e2e:developer": "npx playwright test --project=developer-portal",
+    "test:e2e:dashboard": "npx playwright test --project=operator-dashboard",
+    "test:e2e:gateway": "npx playwright test --project=gateway-portal",
+    "test:e2e:auth": "npx playwright test --project=auth",
+    "test:e2e:report": "npx playwright show-report"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/affinity-ops/OS-Cicada.git"
+  },
+  "keywords": ["ai-governance", "agent-security", "zero-trust", "mcp"],
+  "author": "Patrick Matthews / Affinity Ops",
+  "license": "Apache-2.0",
+  "bugs": {
+    "url": "https://github.com/affinity-ops/OS-Cicada/issues"
+  },
+  "homepage": "https://github.com/affinity-ops/OS-Cicada#readme",
+  "devDependencies": {
+    "@playwright/test": "^1.59.1",
+    "turbo": "^2.5.0"
+  }
+}

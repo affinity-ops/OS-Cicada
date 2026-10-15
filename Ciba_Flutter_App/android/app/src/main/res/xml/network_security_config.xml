@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Network security configuration for Cicada Aegis.
+     In development, the Gateway runs on HTTP (no TLS).
+     This allows cleartext traffic to any host.
+     In production, remove this and enforce HTTPS only. -->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <certificates src="system"/>
+        </trust-anchors>
+    </base-config>
+</network-security-config>

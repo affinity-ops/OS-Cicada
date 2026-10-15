@@ -1,0 +1,75 @@
+# © 2026 Affinity Ops Ltd. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+# cicada.yaml — Cicada Agent Governance Policy
+# Template: LangChain Financial Assistant
+# Risk Level: High (financial transactions, HITL mandatory)
+
+apiVersion: cicada/v1
+kind: AgentPolicy
+
+identity:
+  name: "billing-reconciliation-agent"
+  description: "Autonomous billing reconciliation agent that processes refunds, verifies charges, and generates financial reports using Stripe and internal database APIs."
+  type: autonomous
+  role: processor
+  owner: finance-team@acme.com
+  business_unit: finance
+  data_classification: confidential
+  criticality: high
+
+tools:
+  - name: stripe-charges
+    description: "Read and create charges via Stripe API"
+    url_patterns:
+      - "https://api.stripe.com/v1/charges/*"
+    methods: [GET, POST]
+    risk_level: high
+
+  - name: stripe-refunds
+    description: "Process refunds via Stripe API"
+    url_patterns:
+      - "https://api.stripe.com/v1/refunds/*"
+    methods: [GET, POST]
+    destructive: true
+    risk_level: critical
+
+  - name: internal-invoices
+    description: "Query internal invoice database"
+    url_patterns:
+      - "https://api.internal.acme.com/v1/invoices/*"
+    methods: [GET]
+    risk_level: low
+
+  - name: internal-reports
+    description: "Generate financial reports"
+    url_patterns:
+      - "https://api.internal.acme.com/v1/reports/*"
+    methods: [GET, POST]
+    risk_level: medium
+
+enforcement:
+  velocity:
+    max_reads_per_minute: 60
+    max_writes_per_minute: 10
+    max_deletes_per_minute: 0  # No deletes allowed
+    circuit_breaker_threshold: 5
+  hitl:
+    enabled: true
+    webhook_url: "https://api.internal.acme.com/webhooks/cicada-hitl"
+    timeout_seconds: 3600
+    auto_deny_on_timeout: true
+    risk_threshold: 0.5
+  shadow_mode: false
+  destructive_capability: true
+
+provenance:
+  evar_binding: true
+  content_tagging: true
+  audit_retention_days: 730  # 2 years for financial compliance
+
+compliance:
+  frameworks: [SOC2, GDPR, PCI-DSS]
+  regulatory_region: EU
+  budget_cap_usd: 10000.00
+  cost_centre: "FIN-2026-Q2"

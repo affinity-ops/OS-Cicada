@@ -1,0 +1,1025 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bom xmlns="http://cyclonedx.org/schema/bom/1.6" serialNumber="urn:uuid:d65e3bba-0ecc-4bed-819f-5bf2941e93f2" version="1">
+  <metadata>
+    <timestamp>2026-04-21T20:39:53+01:00</timestamp>
+    <tools>
+      <tool>
+        <vendor>CycloneDX</vendor>
+        <name>cyclonedx-gomod</name>
+        <version>v1.10.0</version>
+        <hashes>
+          <hash alg="MD5">e9c43511f4aa4f77485d4eac79c3cb48</hash>
+          <hash alg="SHA-1">e46a42a78099468486d31a2cc9912c3334192e70</hash>
+          <hash alg="SHA-256">6fbcf45935fd6fdd72141eb18d34cde53df398fa9ffe8a6e0e9b00ced2c59a27</hash>
+          <hash alg="SHA-384">8483ff002c427ed8f8f290ed715cd11bdf652445726db8f137e74826d9e42586b4e0dc78efda4a12bfc5b09c763bdafe</hash>
+          <hash alg="SHA-512">5fbce4be79ab0eee4a5ca4ed4fa84df5419fbfe081fabdd300c0778ad6bcb027d8ea030e2f0325f7e2bbaecf7af79fd587766e8519b42435d145595f42a1a77a</hash>
+        </hashes>
+        <externalReferences>
+          <reference type="vcs">
+            <url>https://github.com/CycloneDX/cyclonedx-gomod</url>
+          </reference>
+          <reference type="website">
+            <url>https://cyclonedx.org</url>
+          </reference>
+        </externalReferences>
+      </tool>
+    </tools>
+    <component bom-ref="pkg:golang/github.com/asai/cicada/sentry@v0.0.0-20260421165845-be6089fd8e51?type=module" type="application">
+      <name>github.com/asai/cicada/sentry</name>
+      <version>v0.0.0-20260421165845-be6089fd8e51</version>
+      <purl>pkg:golang/github.com/asai/cicada/sentry@v0.0.0-20260421165845-be6089fd8e51?goarch=amd64&amp;goos=darwin&amp;type=module</purl>
+      <externalReferences>
+        <reference type="vcs">
+          <url>https://github.com/asai/cicada/sentry</url>
+        </reference>
+      </externalReferences>
+    </component>
+  </metadata>
+  <components>
+    <component bom-ref="pkg:golang/github.com/OneOfOne/xxhash@v1.2.8?type=module" type="library">
+      <name>github.com/OneOfOne/xxhash</name>
+      <version>v1.2.8</version>
+      <scope>required</scope>
+      <hashes>
+        <hash alg="SHA-256">df57332bf4c8f6c364c4829f6947c6954e3b040c50d33b4681df6f3f2aa299ff</hash>
+      </hashes>
+      <purl>pkg:golang/github.com/OneOfOne/xxhash@v1.2.8?goarch=amd64&amp;goos=darwin&amp;type=module</purl>
+      <externalReferences>
+        <reference type="vcs">
+          <url>https://github.com/OneOfOne/xxhash</url>
+        </reference>
+      </externalReferences>
+    </component>
+    <component bom-ref="pkg:golang/github.com/agnivade/levenshtein@v1.1.1?type=module" type="library">
+      <name>github.com/agnivade/levenshtein</name>
+      <version>v1.1.1</version>
+      <scope>required</scope>
+      <hashes>
+        <hash alg="SHA-256">418f0cf769ebce49abefdf200a8de498ccaa5c5cdd415a712e518f4418a3d0ff</hash>
+      </hashes>
+      <purl>pkg:golang/github.com/agnivade/levenshtein@v1.1.1?goarch=amd64&amp;goos=darwin&amp;type=module</purl>
+      <externalReferences>
+        <reference type="vcs">
+          <url>https://github.com/agnivade/levenshtein</url>
+        </reference>
+      </externalReferences>
+    </component>
+    <component bom-ref="pkg:golang/github.com/beorn7/perks@v1.0.1?type=module" type="library">
+      <name>github.com/beorn7/perks</name>
+      <version>v1.0.1</version>
+      <scope>required</scope>
+      <hashes>
+        <hash alg="SHA-256">5656ca2a735f57c6c9cdeaa86b870e2aa3ba6d8af75a0299c4ef19d7afa1b0e3</hash>
+      </hashes>
+      <purl>pkg:golang/github.com/beorn7/perks@v1.0.1?goarch=amd64&amp;goos=darwin&amp;type=module</purl>
+      <externalReferences>
+        <reference type="vcs">
+          <url>https://github.com/beorn7/perks</url>
+        </reference>
+      </externalReferences>
+    </component>
+    <component bom-ref="pkg:golang/github.com/cespare/xxhash/v2@v2.2.0?type=module" type="library">
+      <name>github.com/cespare/xxhash/v2</name>
+      <version>v2.2.0</version>
+      <scope>required</scope>
+      <hashes>
+        <hash alg="SHA-256">0c2d82675129e58e24dd943cf7d0e575ea60adac9150613a04167f71df428f8e</hash>
+      </hashes>
+      <purl>pkg:golang/github.com/cespare/xxhash/v2@v2.2.0?goarch=amd64&amp;goos=darwin&amp;type=module</purl>
+      <externalReferences>
+        <reference type="vcs">
+          <url>https://github.com/cespare/xxhash</url>
+        </reference>
+      </externalReferences>
+    </component>
+    <component bom-ref="pkg:golang/github.com/dgryski/go-rendezvous@v0.0.0-20200823014737-9f7001d12a5f?type=module" type="library">
+      <name>github.com/dgryski/go-rendezvous</name>
+      <version>v0.0.0-20200823014737-9f7001d12a5f</version>
+      <scope>required</scope>
+      <hashes>
+        <hash alg="SHA-256">94ee160f817fad5342bb71ea10b95ed2388f2cb06cef471639db99a644b513bf</hash>
+      </hashes>
+      <purl>pkg:golang/github.com/dgryski/go-rendezvous@v0.0.0-20200823014737-9f7001d12a5f?goarch=amd64&amp;goos=darwin&amp;type=module</purl>
+      <externalReferences>
+        <reference type="vcs">
+          <url>https://github.com/dgryski/go-rendezvous</url>
+        </reference>
+      </externalReferences>
+    </component>
+    <component bom-ref="pkg:golang/github.com/dustin/go-humanize@v1.0.1?type=module" type="library">
+      <name>github.com/dustin/go-humanize</name>
+      <version>v1.0.1</version>
+      <scope>required</scope>
+      <hashes>
+        <hash alg="SHA-256">1b392163b4f954d8449301f43d52608f3f9f5f5ae106b47ba514f79839297826</hash>
+      </hashes>
+      <purl>pkg:golang/github.com/dustin/go-humanize@v1.0.1?goarch=amd64&amp;goos=darwin&amp;type=module</purl>
+      <externalReferences>
+        <reference type="vcs">
+          <url>https://github.com/dustin/go-humanize</url>
+        </reference>
+      </externalReferences>
+    </component>
+    <component bom-ref="pkg:golang/github.com/go-chi/chi/v5@v5.0.11?type=module" type="library">
+      <name>github.com/go-chi/chi/v5</name>
+      <version>v5.0.11</version>
+      <scope>required</scope>
+      <hashes>
+        <hash alg="SHA-256">067a586c56774f74b558ca43efdafb4794e1597e344da141ecbdf563cc6a4b00</hash>
+      </hashes>
+      <purl>pkg:golang/github.com/go-chi/chi/v5@v5.0.11?goarch=amd64&amp;goos=darwin&amp;type=module</purl>
+      <externalReferences>
+        <reference type="vcs">
+          <url>https://github.com/go-chi/chi</url>
+        </reference>
+      </externalReferences>
+    </component>
+    <component bom-ref="pkg:golang/github.com/go-ini/ini@v1.67.0?type=module" type="library">
+      <name>github.com/go-ini/ini</name>
+      <version>v1.67.0</version>
+      <scope>required</scope>
+      <hashes>
+        <hash alg="SHA-256">cfa66b4c466a496393c87d8596094d6cd8004721c6f282d6f603042ea2abd3a0</hash>
+      </hashes>
+      <purl>pkg:golang/github.com/go-ini/ini@v1.67.0?goarch=amd64&amp;goos=darwin&amp;type=module</purl>
+      <externalReferences>
+        <reference type="vcs">
+          <url>https://github.com/go-ini/ini</url>
+        </reference>
+      </externalReferences>
+    </component>
+    <component bom-ref="pkg:golang/github.com/go-logr/logr@v1.3.0?type=module" type="library">
+      <name>github.com/go-logr/logr</name>
+      <version>v1.3.0</version>
+      <scope>required</scope>
+      <hashes>
+        <hash alg="SHA-256">db2dd20e9d195ee73afdc8cb499f90de2afe401f53fe21b9c98457aac6a05926</hash>
+      </hashes>
+      <purl>pkg:golang/github.com/go-logr/logr@v1.3.0?goarch=amd64&amp;goos=darwin&amp;type=module</purl>
+      <externalReferences>
+        <reference type="vcs">
+          <url>https://github.com/go-logr/logr</url>
+        </reference>
+      </externalReferences>
+    </component>
+    <component bom-ref="pkg:golang/github.com/go-logr/stdr@v1.2.2?type=module" type="library">
+      <name>github.com/go-logr/stdr</name>
+      <version>v1.2.2</version>
+      <scope>required</scope>
+      <hashes>
+        <hash alg="SHA-256">8525b11e8a93816d92daa19cd0b4c0239eb7299e582984614f730529931b8da8</hash>
+      </hashes>
+      <purl>pkg:golang/github.com/go-logr/stdr@v1.2.2?goarch=amd64&amp;goos=darwin&amp;type=module</purl>
+      <externalReferences>
+        <reference type="vcs">
+          <url>https://github.com/go-logr/stdr</url>
+        </reference>
+      </externalReferences>
+    </component>
+    <component bom-ref="pkg:golang/github.com/gobwas/glob@v0.2.3?type=module" type="library">
+      <name>github.com/gobwas/glob</name>
+      <version>v0.2.3</version>
+      <scope>required</scope>
+      <hashes>
+        <hash alg="SHA-256">038c436e58c82d744e87e90e6c88b2e6421a3d80fc7bdeb1d6d80185423927e6</hash>
+      </hashes>
+      <purl>pkg:golang/github.com/gobwas/glob@v0.2.3?goarch=amd64&amp;goos=darwin&amp;type=module</purl>
+      <externalReferences>
+        <reference type="vcs">
+          <url>https://github.com/gobwas/glob</url>
+        </reference>
+      </externalReferences>
+    </component>
+    <component bom-ref="pkg:golang/github.com/golang-jwt/jwt/v5@v5.2.0?type=module" type="library">
+      <name>github.com/golang-jwt/jwt/v5</name>
+      <version>v5.2.0</version>
+      <scope>required</scope>
+      <hashes>
+        <hash alg="SHA-256">77f8b1f1fb51528aec37ee5e308945e13e89f0202df6b721dcccb6c229c2d49c</hash>
+      </hashes>
+      <purl>pkg:golang/github.com/golang-jwt/jwt/v5@v5.2.0?goarch=amd64&amp;goos=darwin&amp;type=module</purl>
+      <externalReferences>
+        <reference type="vcs">
+          <url>https://github.com/golang-jwt/jwt</url>
+        </reference>
+      </externalReferences>
+    </component>
+    <component bom-ref="pkg:golang/github.com/golang/protobuf@v1.5.3?type=module" type="library">
+      <name>github.com/golang/protobuf</name>
+      <version>v1.5.3</version>
+      <scope>required</scope>
+      <hashes>
+        <hash alg="SHA-256">2a1ca3295520ed4b2bfdd62c752aa816f78c61de64a3bd83fb300dc251b59a68</hash>
+      </hashes>
+      <purl>pkg:golang/github.com/golang/protobuf@v1.5.3?goarch=amd64&amp;goos=darwin&amp;type=module</purl>
+      <externalReferences>
+        <reference type="vcs">
+          <url>https://github.com/golang/protobuf</url>
+        </reference>
+      </externalReferences>
+    </component>
+    <component bom-ref="pkg:golang/github.com/google/uuid@v1.5.0?type=module" type="library">
+      <name>github.com/google/uuid</name>
+      <version>v1.5.0</version>
+      <scope>required</scope>
+      <hashes>
+        <hash alg="SHA-256">d69ebb918c1db578dbd202f404f88fd40bfdc2264fa3903ccf671691367e7b25</hash>
+      </hashes>
+      <purl>pkg:golang/github.com/google/uuid@v1.5.0?goarch=amd64&amp;goos=darwin&amp;type=module</purl>
+      <externalReferences>
+        <reference type="vcs">
+          <url>https://github.com/google/uuid</url>
+        </reference>
+      </externalReferences>
+    </component>
+    <component bom-ref="pkg:golang/github.com/gorilla/mux@v1.8.1?type=module" type="library">
+      <name>github.com/gorilla/mux</name>
+      <version>v1.8.1</version>
+      <scope>required</scope>
+      <hashes>
+        <hash alg="SHA-256">4ee04be3db57c20ac561686aacd82b50d118f76bbcd523e1bbbb137734048966</hash>
+      </hashes>
+      <purl>pkg:golang/github.com/gorilla/mux@v1.8.1?goarch=amd64&amp;goos=darwin&amp;type=module</purl>
+      <externalReferences>
+        <reference type="vcs">
+          <url>https://github.com/gorilla/mux</url>
+        </reference>
+      </externalReferences>
+    </component>
+    <component bom-ref="pkg:golang/github.com/gorilla/websocket@v1.5.1?type=module" type="library">
+      <name>github.com/gorilla/websocket</name>
+      <version>v1.5.1</version>
+      <scope>required</scope>
+      <hashes>
+        <hash alg="SHA-256">826ced9f42671d5b7d259aae46eccbc37838c28b8d57328bd7988baffce7fd06</hash>
+      </hashes>
+      <purl>pkg:golang/github.com/gorilla/websocket@v1.5.1?goarch=amd64&amp;goos=darwin&amp;type=module</purl>
+      <externalReferences>
+        <reference type="vcs">
+          <url>https://github.com/gorilla/websocket</url>
+        </reference>
+      </externalReferences>
+    </component>
+    <component bom-ref="pkg:golang/github.com/jackc/pgpassfile@v1.0.0?type=module" type="library">
+      <name>github.com/jackc/pgpassfile</name>
+      <version>v1.0.0</version>
+      <scope>required</scope>
+      <hashes>
+        <hash alg="SHA-256">ffa1e6ab2d774acdb30aaeb655d346f2d335c1c867f338d218e049ea2729b083</hash>
+      </hashes>
+      <purl>pkg:golang/github.com/jackc/pgpassfile@v1.0.0?goarch=amd64&amp;goos=darwin&amp;type=module</purl>
+      <externalReferences>
+        <reference type="vcs">
+          <url>https://github.com/jackc/pgpassfile</url>
+        </reference>
+      </externalReferences>
+    </component>
+    <component bom-ref="pkg:golang/github.com/jackc/pgservicefile@v0.0.0-20221227161230-091c0ba34f0a?type=module" type="library">
+      <name>github.com/jackc/pgservicefile</name>
+      <version>v0.0.0-20221227161230-091c0ba34f0a</version>
+      <scope>required</scope>
+      <hashes>
+        <hash alg="SHA-256">6db3de283d31996fd8db9592e9ca2412cce2e60f92d10c48fdde393e4462ecd9</hash>
+      </hashes>
+      <purl>pkg:golang/github.com/jackc/pgservicefile@v0.0.0-20221227161230-091c0ba34f0a?goarch=amd64&amp;goos=darwin&amp;type=module</purl>
+      <externalReferences>
+        <reference type="vcs">
+          <url>https://github.com/jackc/pgservicefile</url>
+        </reference>
+      </externalReferences>
+    </component>
+    <component bom-ref="pkg:golang/github.com/jackc/pgx/v5@v5.5.1?type=module" type="library">
+      <name>github.com/jackc/pgx/v5</name>
+      <version>v5.5.1</version>
+      <scope>required</scope>
+      <hashes>
+        <hash alg="SHA-256">e48f5eb6b1a42eb37ed973c2b22e972e55790c84db48bff105976603115c5cf2</hash>
+      </hashes>
+      <purl>pkg:golang/github.com/jackc/pgx/v5@v5.5.1?goarch=amd64&amp;goos=darwin&amp;type=module</purl>
+      <externalReferences>
+        <reference type="vcs">
+          <url>https://github.com/jackc/pgx</url>
+        </reference>
+      </externalReferences>
+    </component>
+    <component bom-ref="pkg:golang/github.com/jackc/puddle/v2@v2.2.1?type=module" type="library">
+      <name>github.com/jackc/puddle/v2</name>
+      <version>v2.2.1</version>
+      <scope>required</scope>
+      <hashes>
+        <hash alg="SHA-256">461c5726d146d36daee226eb0923128aee5a3aad62efb47738728d263efb3809</hash>
+      </hashes>
+      <purl>pkg:golang/github.com/jackc/puddle/v2@v2.2.1?goarch=amd64&amp;goos=darwin&amp;type=module</purl>
+      <externalReferences>
+        <reference type="vcs">
+          <url>https://github.com/jackc/puddle</url>
+        </reference>
+      </externalReferences>
+    </component>
+    <component bom-ref="pkg:golang/github.com/kballard/go-shellquote@v0.0.0-20180428030007-95032a82bc51?type=module" type="library">
+      <name>github.com/kballard/go-shellquote</name>
+      <version>v0.0.0-20180428030007-95032a82bc51</version>
+      <scope>required</scope>
+      <hashes>
+        <hash alg="SHA-256">67d9f61453545ecb217f024c060340d1153afe2ed655a01e82fdcfb6e2073ccb</hash>
+      </hashes>
+      <purl>pkg:golang/github.com/kballard/go-shellquote@v0.0.0-20180428030007-95032a82bc51?goarch=amd64&amp;goos=darwin&amp;type=module</purl>
+      <externalReferences>
+        <reference type="vcs">
+          <url>https://github.com/kballard/go-shellquote</url>
+        </reference>
+      </externalReferences>
+    </component>
+    <component bom-ref="pkg:golang/github.com/mattn/go-isatty@v0.0.16?type=module" type="library">
+      <name>github.com/mattn/go-isatty</name>
+      <version>v0.0.16</version>
+      <scope>required</scope>
+      <hashes>
+        <hash alg="SHA-256">6eadd58c59affec3a31ed744866904578c75009b6f52f389d8f140679fa978a4</hash>
+      </hashes>
+      <purl>pkg:golang/github.com/mattn/go-isatty@v0.0.16?goarch=amd64&amp;goos=darwin&amp;type=module</purl>
+      <externalReferences>
+        <reference type="vcs">
+          <url>https://github.com/mattn/go-isatty</url>
+        </reference>
+      </externalReferences>
+    </component>
+    <component bom-ref="pkg:golang/github.com/matttproud/golang_protobuf_extensions@v1.0.4?type=module" type="library">
+      <name>github.com/matttproud/golang_protobuf_extensions</name>
+      <version>v1.0.4</version>
+      <scope>required</scope>
+      <hashes>
+        <hash alg="SHA-256">9a60d5a2b5ccecf0862b0f7872ce7391f03d3d2cb9a44bcd5913f4113d13215a</hash>
+      </hashes>
+      <purl>pkg:golang/github.com/matttproud/golang_protobuf_extensions@v1.0.4?goarch=amd64&amp;goos=darwin&amp;type=module</purl>
+      <externalReferences>
+        <reference type="vcs">
+          <url>https://github.com/matttproud/golang_protobuf_extensions</url>
+        </reference>
+      </externalReferences>
+    </component>
+    <component bom-ref="pkg:golang/github.com/open-policy-agent/opa@v0.60.0?type=module" type="library">
+      <name>github.com/open-policy-agent/opa</name>
+      <version>v0.60.0</version>
+      <scope>required</scope>
+      <hashes>
+        <hash alg="SHA-256">64fa0fb78c9e36ce545c2a5dfcffdbb694b247c091d307e156887d04ec2024db</hash>
+      </hashes>
+      <purl>pkg:golang/github.com/open-policy-agent/opa@v0.60.0?goarch=amd64&amp;goos=darwin&amp;type=module</purl>
+      <externalReferences>
+        <reference type="vcs">
+          <url>https://github.com/open-policy-agent/opa</url>
+        </reference>
+      </externalReferences>
+    </component>
+    <component bom-ref="pkg:golang/github.com/prometheus/client_golang@v1.16.0?type=module" type="library">
+      <name>github.com/prometheus/client_golang</name>
+      <version>v1.16.0</version>
+      <scope>required</scope>
+      <hashes>
+        <hash alg="SHA-256">ca4fe1c7d8436eb187a2f6dc8b8058fa944c7d2bae6adeb6e9e16c1dbeed993f</hash>
+      </hashes>
+      <purl>pkg:golang/github.com/prometheus/client_golang@v1.16.0?goarch=amd64&amp;goos=darwin&amp;type=module</purl>
+      <externalReferences>
+        <reference type="vcs">
+          <url>https://github.com/prometheus/client_golang</url>
+        </reference>
+      </externalReferences>
+    </component>
+    <component bom-ref="pkg:golang/github.com/prometheus/client_model@v0.3.0?type=module" type="library">
+      <name>github.com/prometheus/client_model</name>
+      <version>v0.3.0</version>
+      <scope>required</scope>
+      <hashes>
+        <hash alg="SHA-256">501806147a98746fd33c50f5075a20672c03a84930a777c132fa9d890ed77b0e</hash>
+      </hashes>
+      <purl>pkg:golang/github.com/prometheus/client_model@v0.3.0?goarch=amd64&amp;goos=darwin&amp;type=module</purl>
+      <externalReferences>
+        <reference type="vcs">
+          <url>https://github.com/prometheus/client_model</url>
+        </reference>
+      </externalReferences>
+    </component>
+    <component bom-ref="pkg:golang/github.com/prometheus/common@v0.42.0?type=module" type="library">
+      <name>github.com/prometheus/common</name>
+      <version>v0.42.0</version>
+      <scope>required</scope>
+      <hashes>
+        <hash alg="SHA-256">10ab1f5c4628e09a563071f9720f8a39459eb894a8bf521df33191f1e788d583</hash>
+      </hashes>
+      <purl>pkg:golang/github.com/prometheus/common@v0.42.0?goarch=amd64&amp;goos=darwin&amp;type=module</purl>
+      <externalReferences>
+        <reference type="vcs">
+          <url>https://github.com/prometheus/common</url>
+        </reference>
+      </externalReferences>
+    </component>
+    <component bom-ref="pkg:golang/github.com/prometheus/procfs@v0.10.1?type=module" type="library">
+      <name>github.com/prometheus/procfs</name>
+      <version>v0.10.1</version>
+      <scope>required</scope>
+      <hashes>
+        <hash alg="SHA-256">9182b555afd8325badcc219acecc281caa3ffed655945a4a621f8fca6ce25008</hash>
+      </hashes>
+      <purl>pkg:golang/github.com/prometheus/procfs@v0.10.1?goarch=amd64&amp;goos=darwin&amp;type=module</purl>
+      <externalReferences>
+        <reference type="vcs">
+          <url>https://github.com/prometheus/procfs</url>
+        </reference>
+      </externalReferences>
+    </component>
+    <component bom-ref="pkg:golang/github.com/rcrowley/go-metrics@v0.0.0-20200313005456-10cdbea86bc0?type=module" type="library">
+      <name>github.com/rcrowley/go-metrics</name>
+      <version>v0.0.0-20200313005456-10cdbea86bc0</version>
+      <scope>required</scope>
+      <hashes>
+        <hash alg="SHA-256">32457eefb18b50da39a09d237fcef48ad5a6dc3d128e1efe65af606b329ce4b4</hash>
+      </hashes>
+      <purl>pkg:golang/github.com/rcrowley/go-metrics@v0.0.0-20200313005456-10cdbea86bc0?goarch=amd64&amp;goos=darwin&amp;type=module</purl>
+      <externalReferences>
+        <reference type="vcs">
+          <url>https://github.com/rcrowley/go-metrics</url>
+        </reference>
+      </externalReferences>
+    </component>
+    <component bom-ref="pkg:golang/github.com/redis/go-redis/v9@v9.4.0?type=module" type="library">
+      <name>github.com/redis/go-redis/v9</name>
+      <version>v9.4.0</version>
+      <scope>required</scope>
+      <hashes>
+        <hash alg="SHA-256">633a33df7519c3d23f985871e0c36b07a164f971ced55ba435c09ad7e970c8a9</hash>
+      </hashes>
+      <purl>pkg:golang/github.com/redis/go-redis/v9@v9.4.0?goarch=amd64&amp;goos=darwin&amp;type=module</purl>
+      <externalReferences>
+        <reference type="vcs">
+          <url>https://github.com/redis/go-redis</url>
+        </reference>
+      </externalReferences>
+    </component>
+    <component bom-ref="pkg:golang/github.com/remyoudompheng/bigfft@v0.0.0-20230129092748-24d4a6f8daec?type=module" type="library">
+      <name>github.com/remyoudompheng/bigfft</name>
+      <version>v0.0.0-20230129092748-24d4a6f8daec</version>
+      <scope>required</scope>
+      <hashes>
+        <hash alg="SHA-256">5b4f4854973de2272ae0d8d8ddc95becb93c3b5a89f01741105f33d226d4d2b1</hash>
+      </hashes>
+      <purl>pkg:golang/github.com/remyoudompheng/bigfft@v0.0.0-20230129092748-24d4a6f8daec?goarch=amd64&amp;goos=darwin&amp;type=module</purl>
+      <externalReferences>
+        <reference type="vcs">
+          <url>https://github.com/remyoudompheng/bigfft</url>
+        </reference>
+      </externalReferences>
+    </component>
+    <component bom-ref="pkg:golang/github.com/sirupsen/logrus@v1.9.3?type=module" type="library">
+      <name>github.com/sirupsen/logrus</name>
+      <version>v1.9.3</version>
+      <scope>required</scope>
+      <hashes>
+        <hash alg="SHA-256">76e794409d42daaf6813717bc2f992180695b539948b345ebba7e337cbaacdb4</hash>
+      </hashes>
+      <purl>pkg:golang/github.com/sirupsen/logrus@v1.9.3?goarch=amd64&amp;goos=darwin&amp;type=module</purl>
+      <externalReferences>
+        <reference type="vcs">
+          <url>https://github.com/sirupsen/logrus</url>
+        </reference>
+      </externalReferences>
+    </component>
+    <component bom-ref="pkg:golang/github.com/tchap/go-patricia/v2@v2.3.1?type=module" type="library">
+      <name>github.com/tchap/go-patricia/v2</name>
+      <version>v2.3.1</version>
+      <scope>required</scope>
+      <hashes>
+        <hash alg="SHA-256">eab429dfd96021867e30799d12ae31cee935b7b39d0b7e73ff19b404685391eb</hash>
+      </hashes>
+      <purl>pkg:golang/github.com/tchap/go-patricia/v2@v2.3.1?goarch=amd64&amp;goos=darwin&amp;type=module</purl>
+      <externalReferences>
+        <reference type="vcs">
+          <url>https://github.com/tchap/go-patricia</url>
+        </reference>
+      </externalReferences>
+    </component>
+    <component bom-ref="pkg:golang/github.com/xeipuuv/gojsonpointer@v0.0.0-20190905194746-02993c407bfb?type=module" type="library">
+      <name>github.com/xeipuuv/gojsonpointer</name>
+      <version>v0.0.0-20190905194746-02993c407bfb</version>
+      <scope>required</scope>
+      <hashes>
+        <hash alg="SHA-256">cc658502d88c732af2507a148d4257d3f96dd47dbe8b629ada7f83dc322648da</hash>
+      </hashes>
+      <purl>pkg:golang/github.com/xeipuuv/gojsonpointer@v0.0.0-20190905194746-02993c407bfb?goarch=amd64&amp;goos=darwin&amp;type=module</purl>
+      <externalReferences>
+        <reference type="vcs">
+          <url>https://github.com/xeipuuv/gojsonpointer</url>
+        </reference>
+      </externalReferences>
+    </component>
+    <component bom-ref="pkg:golang/github.com/xeipuuv/gojsonreference@v0.0.0-20180127040603-bd5ef7bd5415?type=module" type="library">
+      <name>github.com/xeipuuv/gojsonreference</name>
+      <version>v0.0.0-20180127040603-bd5ef7bd5415</version>
+      <scope>required</scope>
+      <hashes>
+        <hash alg="SHA-256">133256807a2fa27b7b36c723a40c57b0303c4bc04c62f7bc639fbb72e444ed1d</hash>
+      </hashes>
+      <purl>pkg:golang/github.com/xeipuuv/gojsonreference@v0.0.0-20180127040603-bd5ef7bd5415?goarch=amd64&amp;goos=darwin&amp;type=module</purl>
+      <externalReferences>
+        <reference type="vcs">
+          <url>https://github.com/xeipuuv/gojsonreference</url>
+        </reference>
+      </externalReferences>
+    </component>
+    <component bom-ref="pkg:golang/github.com/yashtewari/glob-intersection@v0.2.0?type=module" type="library">
+      <name>github.com/yashtewari/glob-intersection</name>
+      <version>v0.2.0</version>
+      <scope>required</scope>
+      <hashes>
+        <hash alg="SHA-256">f22b8774df3cc98b82cc2763b748037bee9b02153005e116a93844c6ee784458</hash>
+      </hashes>
+      <purl>pkg:golang/github.com/yashtewari/glob-intersection@v0.2.0?goarch=amd64&amp;goos=darwin&amp;type=module</purl>
+      <externalReferences>
+        <reference type="vcs">
+          <url>https://github.com/yashtewari/glob-intersection</url>
+        </reference>
+      </externalReferences>
+    </component>
+    <component bom-ref="pkg:golang/go.opentelemetry.io/otel@v1.21.0?type=module" type="library">
+      <name>go.opentelemetry.io/otel</name>
+      <version>v1.21.0</version>
+      <scope>required</scope>
+      <hashes>
+        <hash alg="SHA-256">8732de2816442fb3a4c36986cd9d1c73893f03b16d6b4ba83e06890abf1fb057</hash>
+      </hashes>
+      <purl>pkg:golang/go.opentelemetry.io/otel@v1.21.0?goarch=amd64&amp;goos=darwin&amp;type=module</purl>
+    </component>
+    <component bom-ref="pkg:golang/go.opentelemetry.io/otel/metric@v1.21.0?type=module" type="library">
+      <name>go.opentelemetry.io/otel/metric</name>
+      <version>v1.21.0</version>
+      <scope>required</scope>
+      <hashes>
+        <hash alg="SHA-256">b656167dea3e068731e642c49684e36dc0f006e10b46b205c70750dfa3e526ee</hash>
+      </hashes>
+      <purl>pkg:golang/go.opentelemetry.io/otel/metric@v1.21.0?goarch=amd64&amp;goos=darwin&amp;type=module</purl>
+    </component>
+    <component bom-ref="pkg:golang/go.opentelemetry.io/otel/sdk@v1.21.0?type=module" type="library">
+      <name>go.opentelemetry.io/otel/sdk</name>
+      <version>v1.21.0</version>
+      <scope>required</scope>
+      <hashes>
+        <hash alg="SHA-256">153b7caa2acbd44cac1bab134116794e892453c774ba00a3f21b4e8138595d0f</hash>
+      </hashes>
+      <purl>pkg:golang/go.opentelemetry.io/otel/sdk@v1.21.0?goarch=amd64&amp;goos=darwin&amp;type=module</purl>
+    </component>
+    <component bom-ref="pkg:golang/go.opentelemetry.io/otel/trace@v1.21.0?type=module" type="library">
+      <name>go.opentelemetry.io/otel/trace</name>
+      <version>v1.21.0</version>
+      <scope>required</scope>
+      <hashes>
+        <hash alg="SHA-256">583f62e60cefa143ee5c85c7db864d06e7626ab6432ae7a43ea8bf13c7e97cb7</hash>
+      </hashes>
+      <purl>pkg:golang/go.opentelemetry.io/otel/trace@v1.21.0?goarch=amd64&amp;goos=darwin&amp;type=module</purl>
+    </component>
+    <component bom-ref="pkg:golang/golang.org/x/crypto@v0.16.0?type=module" type="library">
+      <name>golang.org/x/crypto</name>
+      <version>v0.16.0</version>
+      <scope>required</scope>
+      <hashes>
+        <hash alg="SHA-256">98c32b173452085d06bc1ecd7b6ed756d5406972eb3e680f0bbfefd2d9301da6</hash>
+      </hashes>
+      <purl>pkg:golang/golang.org/x/crypto@v0.16.0?goarch=amd64&amp;goos=darwin&amp;type=module</purl>
+    </component>
+    <component bom-ref="pkg:golang/golang.org/x/mod@v0.8.0?type=module" type="library">
+      <name>golang.org/x/mod</name>
+      <version>v0.8.0</version>
+      <scope>required</scope>
+      <hashes>
+        <hash alg="SHA-256">2d462ea5278dad33421b347f855064d8d1d93b8857715696d64e10c7bae33f1f</hash>
+      </hashes>
+      <purl>pkg:golang/golang.org/x/mod@v0.8.0?goarch=amd64&amp;goos=darwin&amp;type=module</purl>
+    </component>
+    <component bom-ref="pkg:golang/golang.org/x/net@v0.19.0?type=module" type="library">
+      <name>golang.org/x/net</name>
+      <version>v0.19.0</version>
+      <scope>required</scope>
+      <hashes>
+        <hash alg="SHA-256">cd3c0aa537765ee0aa7fc86e73b168da24b2fb84473ddd74b382b37939d5af57</hash>
+      </hashes>
+      <purl>pkg:golang/golang.org/x/net@v0.19.0?goarch=amd64&amp;goos=darwin&amp;type=module</purl>
+    </component>
+    <component bom-ref="pkg:golang/golang.org/x/sync@v0.4.0?type=module" type="library">
+      <name>golang.org/x/sync</name>
+      <version>v0.4.0</version>
+      <scope>required</scope>
+      <hashes>
+        <hash alg="SHA-256">cf190ce7945e1a40e529233e16ee3503ece66d9b9a3d56c6333bef7543f39d84</hash>
+      </hashes>
+      <purl>pkg:golang/golang.org/x/sync@v0.4.0?goarch=amd64&amp;goos=darwin&amp;type=module</purl>
+    </component>
+    <component bom-ref="pkg:golang/golang.org/x/sys@v0.15.0?type=module" type="library">
+      <name>golang.org/x/sys</name>
+      <version>v0.15.0</version>
+      <scope>required</scope>
+      <hashes>
+        <hash alg="SHA-256">878f253c5629b13bd025917810ac88e1a2c769ebf70b18af666bfbc998a0f697</hash>
+      </hashes>
+      <purl>pkg:golang/golang.org/x/sys@v0.15.0?goarch=amd64&amp;goos=darwin&amp;type=module</purl>
+    </component>
+    <component bom-ref="pkg:golang/golang.org/x/text@v0.14.0?type=module" type="library">
+      <name>golang.org/x/text</name>
+      <version>v0.14.0</version>
+      <scope>required</scope>
+      <hashes>
+        <hash alg="SHA-256">49c5f9c357936b742a4fca22ebece23fb7535754b6f802d4d1b23ed335ca5a24</hash>
+      </hashes>
+      <purl>pkg:golang/golang.org/x/text@v0.14.0?goarch=amd64&amp;goos=darwin&amp;type=module</purl>
+    </component>
+    <component bom-ref="pkg:golang/golang.org/x/tools@v0.6.0?type=module" type="library">
+      <name>golang.org/x/tools</name>
+      <version>v0.6.0</version>
+      <scope>required</scope>
+      <hashes>
+        <hash alg="SHA-256">04ec38d64c937f73ee096d695507fcf82ca0f29325918075a28f6227a0ff94a3</hash>
+      </hashes>
+      <purl>pkg:golang/golang.org/x/tools@v0.6.0?goarch=amd64&amp;goos=darwin&amp;type=module</purl>
+    </component>
+    <component bom-ref="pkg:golang/google.golang.org/protobuf@v1.31.0?type=module" type="library">
+      <name>google.golang.org/protobuf</name>
+      <version>v1.31.0</version>
+      <scope>required</scope>
+      <hashes>
+        <hash alg="SHA-256">8342c31091e0ac197d37daf5ed1bb7b2a5a1908c76341ebba240473f00bb86cf</hash>
+      </hashes>
+      <purl>pkg:golang/google.golang.org/protobuf@v1.31.0?goarch=amd64&amp;goos=darwin&amp;type=module</purl>
+    </component>
+    <component bom-ref="pkg:golang/gopkg.in/yaml.v2@v2.4.0?type=module" type="library">
+      <name>gopkg.in/yaml.v2</name>
+      <version>v2.4.0</version>
+      <scope>required</scope>
+      <hashes>
+        <hash alg="SHA-256">0fcc60c04098ec262fc7e6369f8b01cfddc99fd251bf1762cb2a3c0937ee29a6</hash>
+      </hashes>
+      <purl>pkg:golang/gopkg.in/yaml.v2@v2.4.0?goarch=amd64&amp;goos=darwin&amp;type=module</purl>
+      <externalReferences>
+        <reference type="vcs">
+          <url>https://github.com/go-yaml/yaml</url>
+        </reference>
+      </externalReferences>
+    </component>
+    <component bom-ref="pkg:golang/lukechampine.com/uint128@v1.2.0?type=module" type="library">
+      <name>lukechampine.com/uint128</name>
+      <version>v1.2.0</version>
+      <scope>required</scope>
+      <hashes>
+        <hash alg="SHA-256">9818bfe65f75be870437ca2d902e5b0cb862d8a742b627118b06dd0743beae32</hash>
+      </hashes>
+      <purl>pkg:golang/lukechampine.com/uint128@v1.2.0?goarch=amd64&amp;goos=darwin&amp;type=module</purl>
+    </component>
+    <component bom-ref="pkg:golang/modernc.org/cc/v3@v3.40.0?type=module" type="library">
+      <name>modernc.org/cc/v3</name>
+      <version>v3.40.0</version>
+      <scope>required</scope>
+      <hashes>
+        <hash alg="SHA-256">3f783bf48512ffddd2621b6879a1d6fa444222b61ac49dbb3053effbb91a4cec</hash>
+      </hashes>
+      <purl>pkg:golang/modernc.org/cc/v3@v3.40.0?goarch=amd64&amp;goos=darwin&amp;type=module</purl>
+    </component>
+    <component bom-ref="pkg:golang/modernc.org/ccgo/v3@v3.16.13?type=module" type="library">
+      <name>modernc.org/ccgo/v3</name>
+      <version>v3.16.13</version>
+      <scope>required</scope>
+      <hashes>
+        <hash alg="SHA-256">32481dce5e3a8b917f08d47f2a3f34462e7d842f13280859ad849aaaf930cd4c</hash>
+      </hashes>
+      <purl>pkg:golang/modernc.org/ccgo/v3@v3.16.13?goarch=amd64&amp;goos=darwin&amp;type=module</purl>
+    </component>
+    <component bom-ref="pkg:golang/modernc.org/libc@v1.29.0?type=module" type="library">
+      <name>modernc.org/libc</name>
+      <version>v1.29.0</version>
+      <scope>required</scope>
+      <hashes>
+        <hash alg="SHA-256">b5315116aebd60a085d90c8636e4544312819b5b9964bb9b7fa0a387fa551d7b</hash>
+      </hashes>
+      <purl>pkg:golang/modernc.org/libc@v1.29.0?goarch=amd64&amp;goos=darwin&amp;type=module</purl>
+    </component>
+    <component bom-ref="pkg:golang/modernc.org/mathutil@v1.6.0?type=module" type="library">
+      <name>modernc.org/mathutil</name>
+      <version>v1.6.0</version>
+      <scope>required</scope>
+      <hashes>
+        <hash alg="SHA-256">7d17bdf8099895a7a3fbae09b04121a16b8060190eb5088c114ee7fd781f622e</hash>
+      </hashes>
+      <purl>pkg:golang/modernc.org/mathutil@v1.6.0?goarch=amd64&amp;goos=darwin&amp;type=module</purl>
+    </component>
+    <component bom-ref="pkg:golang/modernc.org/memory@v1.7.2?type=module" type="library">
+      <name>modernc.org/memory</name>
+      <version>v1.7.2</version>
+      <scope>required</scope>
+      <hashes>
+        <hash alg="SHA-256">2a587dd12db5e66987f1cf603bdf10c5016c63e5b8e7513c027ce3a04d9e7b51</hash>
+      </hashes>
+      <purl>pkg:golang/modernc.org/memory@v1.7.2?goarch=amd64&amp;goos=darwin&amp;type=module</purl>
+    </component>
+    <component bom-ref="pkg:golang/modernc.org/opt@v0.1.3?type=module" type="library">
+      <name>modernc.org/opt</name>
+      <version>v0.1.3</version>
+      <scope>required</scope>
+      <hashes>
+        <hash alg="SHA-256">dd73997f6cb39e5842fa26cb96db031b3001506571f09ea99c5312dc4e1d72ae</hash>
+      </hashes>
+      <purl>pkg:golang/modernc.org/opt@v0.1.3?goarch=amd64&amp;goos=darwin&amp;type=module</purl>
+    </component>
+    <component bom-ref="pkg:golang/modernc.org/sqlite@v1.28.0?type=module" type="library">
+      <name>modernc.org/sqlite</name>
+      <version>v1.28.0</version>
+      <scope>required</scope>
+      <hashes>
+        <hash alg="SHA-256">671f8bc830e65dcccd9c441dbcfb847dc15503664fc9a0fb5026438de7f70474</hash>
+      </hashes>
+      <purl>pkg:golang/modernc.org/sqlite@v1.28.0?goarch=amd64&amp;goos=darwin&amp;type=module</purl>
+    </component>
+    <component bom-ref="pkg:golang/modernc.org/strutil@v1.1.3?type=module" type="library">
+      <name>modernc.org/strutil</name>
+      <version>v1.1.3</version>
+      <scope>required</scope>
+      <hashes>
+        <hash alg="SHA-256">7cd326fa826494c1987d4f5895ccb097408ee4eea74df6a8c0db21db0a4f8f36</hash>
+      </hashes>
+      <purl>pkg:golang/modernc.org/strutil@v1.1.3?goarch=amd64&amp;goos=darwin&amp;type=module</purl>
+    </component>
+    <component bom-ref="pkg:golang/modernc.org/token@v1.0.1?type=module" type="library">
+      <name>modernc.org/token</name>
+      <version>v1.0.1</version>
+      <scope>required</scope>
+      <hashes>
+        <hash alg="SHA-256">037aaf4ea3b07b1a5f6597b223415e18f0e54965f9a6366ef61178954f842968</hash>
+      </hashes>
+      <purl>pkg:golang/modernc.org/token@v1.0.1?goarch=amd64&amp;goos=darwin&amp;type=module</purl>
+    </component>
+    <component bom-ref="pkg:golang/sigs.k8s.io/yaml@v1.4.0?type=module" type="library">
+      <name>sigs.k8s.io/yaml</name>
+      <version>v1.4.0</version>
+      <scope>required</scope>
+      <hashes>
+        <hash alg="SHA-256">324d7009cda0cbf1744c71f44c0a75418c89373466d8a08bcb7a390125d52391</hash>
+      </hashes>
+      <purl>pkg:golang/sigs.k8s.io/yaml@v1.4.0?goarch=amd64&amp;goos=darwin&amp;type=module</purl>
+    </component>
+  </components>
+  <dependencies>
+    <dependency ref="pkg:golang/github.com/asai/cicada/sentry@v0.0.0-20260421165845-be6089fd8e51?type=module">
+      <dependency ref="pkg:golang/github.com/go-chi/chi/v5@v5.0.11?type=module"></dependency>
+      <dependency ref="pkg:golang/github.com/golang-jwt/jwt/v5@v5.2.0?type=module"></dependency>
+      <dependency ref="pkg:golang/github.com/gorilla/websocket@v1.5.1?type=module"></dependency>
+      <dependency ref="pkg:golang/github.com/jackc/pgx/v5@v5.5.1?type=module"></dependency>
+      <dependency ref="pkg:golang/github.com/open-policy-agent/opa@v0.60.0?type=module"></dependency>
+      <dependency ref="pkg:golang/github.com/redis/go-redis/v9@v9.4.0?type=module"></dependency>
+      <dependency ref="pkg:golang/modernc.org/sqlite@v1.28.0?type=module"></dependency>
+    </dependency>
+    <dependency ref="pkg:golang/github.com/OneOfOne/xxhash@v1.2.8?type=module"></dependency>
+    <dependency ref="pkg:golang/github.com/agnivade/levenshtein@v1.1.1?type=module"></dependency>
+    <dependency ref="pkg:golang/github.com/beorn7/perks@v1.0.1?type=module"></dependency>
+    <dependency ref="pkg:golang/github.com/cespare/xxhash/v2@v2.2.0?type=module"></dependency>
+    <dependency ref="pkg:golang/github.com/dgryski/go-rendezvous@v0.0.0-20200823014737-9f7001d12a5f?type=module"></dependency>
+    <dependency ref="pkg:golang/github.com/dustin/go-humanize@v1.0.1?type=module"></dependency>
+    <dependency ref="pkg:golang/github.com/go-chi/chi/v5@v5.0.11?type=module"></dependency>
+    <dependency ref="pkg:golang/github.com/go-ini/ini@v1.67.0?type=module"></dependency>
+    <dependency ref="pkg:golang/github.com/go-logr/logr@v1.3.0?type=module"></dependency>
+    <dependency ref="pkg:golang/github.com/go-logr/stdr@v1.2.2?type=module">
+      <dependency ref="pkg:golang/github.com/go-logr/logr@v1.3.0?type=module"></dependency>
+    </dependency>
+    <dependency ref="pkg:golang/github.com/gobwas/glob@v0.2.3?type=module"></dependency>
+    <dependency ref="pkg:golang/github.com/golang-jwt/jwt/v5@v5.2.0?type=module"></dependency>
+    <dependency ref="pkg:golang/github.com/golang/protobuf@v1.5.3?type=module">
+      <dependency ref="pkg:golang/google.golang.org/protobuf@v1.31.0?type=module"></dependency>
+    </dependency>
+    <dependency ref="pkg:golang/github.com/google/uuid@v1.5.0?type=module"></dependency>
+    <dependency ref="pkg:golang/github.com/gorilla/mux@v1.8.1?type=module"></dependency>
+    <dependency ref="pkg:golang/github.com/gorilla/websocket@v1.5.1?type=module">
+      <dependency ref="pkg:golang/golang.org/x/net@v0.19.0?type=module"></dependency>
+    </dependency>
+    <dependency ref="pkg:golang/github.com/jackc/pgpassfile@v1.0.0?type=module"></dependency>
+    <dependency ref="pkg:golang/github.com/jackc/pgservicefile@v0.0.0-20221227161230-091c0ba34f0a?type=module"></dependency>
+    <dependency ref="pkg:golang/github.com/jackc/pgx/v5@v5.5.1?type=module">
+      <dependency ref="pkg:golang/github.com/jackc/pgpassfile@v1.0.0?type=module"></dependency>
+      <dependency ref="pkg:golang/github.com/jackc/pgservicefile@v0.0.0-20221227161230-091c0ba34f0a?type=module"></dependency>
+      <dependency ref="pkg:golang/github.com/jackc/puddle/v2@v2.2.1?type=module"></dependency>
+      <dependency ref="pkg:golang/golang.org/x/crypto@v0.16.0?type=module"></dependency>
+      <dependency ref="pkg:golang/golang.org/x/sync@v0.4.0?type=module"></dependency>
+      <dependency ref="pkg:golang/golang.org/x/text@v0.14.0?type=module"></dependency>
+    </dependency>
+    <dependency ref="pkg:golang/github.com/jackc/puddle/v2@v2.2.1?type=module">
+      <dependency ref="pkg:golang/golang.org/x/sync@v0.4.0?type=module"></dependency>
+    </dependency>
+    <dependency ref="pkg:golang/github.com/kballard/go-shellquote@v0.0.0-20180428030007-95032a82bc51?type=module"></dependency>
+    <dependency ref="pkg:golang/github.com/mattn/go-isatty@v0.0.16?type=module">
+      <dependency ref="pkg:golang/golang.org/x/sys@v0.15.0?type=module"></dependency>
+    </dependency>
+    <dependency ref="pkg:golang/github.com/matttproud/golang_protobuf_extensions@v1.0.4?type=module">
+      <dependency ref="pkg:golang/github.com/golang/protobuf@v1.5.3?type=module"></dependency>
+      <dependency ref="pkg:golang/golang.org/x/sync@v0.4.0?type=module"></dependency>
+    </dependency>
+    <dependency ref="pkg:golang/github.com/open-policy-agent/opa@v0.60.0?type=module">
+      <dependency ref="pkg:golang/github.com/OneOfOne/xxhash@v1.2.8?type=module"></dependency>
+      <dependency ref="pkg:golang/github.com/agnivade/levenshtein@v1.1.1?type=module"></dependency>
+      <dependency ref="pkg:golang/github.com/beorn7/perks@v1.0.1?type=module"></dependency>
+      <dependency ref="pkg:golang/github.com/cespare/xxhash/v2@v2.2.0?type=module"></dependency>
+      <dependency ref="pkg:golang/github.com/dustin/go-humanize@v1.0.1?type=module"></dependency>
+      <dependency ref="pkg:golang/github.com/go-ini/ini@v1.67.0?type=module"></dependency>
+      <dependency ref="pkg:golang/github.com/go-logr/logr@v1.3.0?type=module"></dependency>
+      <dependency ref="pkg:golang/github.com/go-logr/stdr@v1.2.2?type=module"></dependency>
+      <dependency ref="pkg:golang/github.com/gobwas/glob@v0.2.3?type=module"></dependency>
+      <dependency ref="pkg:golang/github.com/golang/protobuf@v1.5.3?type=module"></dependency>
+      <dependency ref="pkg:golang/github.com/google/uuid@v1.5.0?type=module"></dependency>
+      <dependency ref="pkg:golang/github.com/gorilla/mux@v1.8.1?type=module"></dependency>
+      <dependency ref="pkg:golang/github.com/matttproud/golang_protobuf_extensions@v1.0.4?type=module"></dependency>
+      <dependency ref="pkg:golang/github.com/prometheus/client_golang@v1.16.0?type=module"></dependency>
+      <dependency ref="pkg:golang/github.com/prometheus/client_model@v0.3.0?type=module"></dependency>
+      <dependency ref="pkg:golang/github.com/prometheus/common@v0.42.0?type=module"></dependency>
+      <dependency ref="pkg:golang/github.com/prometheus/procfs@v0.10.1?type=module"></dependency>
+      <dependency ref="pkg:golang/github.com/rcrowley/go-metrics@v0.0.0-20200313005456-10cdbea86bc0?type=module"></dependency>
+      <dependency ref="pkg:golang/github.com/sirupsen/logrus@v1.9.3?type=module"></dependency>
+      <dependency ref="pkg:golang/github.com/tchap/go-patricia/v2@v2.3.1?type=module"></dependency>
+      <dependency ref="pkg:golang/github.com/xeipuuv/gojsonpointer@v0.0.0-20190905194746-02993c407bfb?type=module"></dependency>
+      <dependency ref="pkg:golang/github.com/xeipuuv/gojsonreference@v0.0.0-20180127040603-bd5ef7bd5415?type=module"></dependency>
+      <dependency ref="pkg:golang/github.com/yashtewari/glob-intersection@v0.2.0?type=module"></dependency>
+      <dependency ref="pkg:golang/go.opentelemetry.io/otel@v1.21.0?type=module"></dependency>
+      <dependency ref="pkg:golang/go.opentelemetry.io/otel/metric@v1.21.0?type=module"></dependency>
+      <dependency ref="pkg:golang/go.opentelemetry.io/otel/sdk@v1.21.0?type=module"></dependency>
+      <dependency ref="pkg:golang/go.opentelemetry.io/otel/trace@v1.21.0?type=module"></dependency>
+      <dependency ref="pkg:golang/golang.org/x/net@v0.19.0?type=module"></dependency>
+      <dependency ref="pkg:golang/golang.org/x/sync@v0.4.0?type=module"></dependency>
+      <dependency ref="pkg:golang/golang.org/x/sys@v0.15.0?type=module"></dependency>
+      <dependency ref="pkg:golang/golang.org/x/text@v0.14.0?type=module"></dependency>
+      <dependency ref="pkg:golang/google.golang.org/protobuf@v1.31.0?type=module"></dependency>
+      <dependency ref="pkg:golang/gopkg.in/yaml.v2@v2.4.0?type=module"></dependency>
+      <dependency ref="pkg:golang/sigs.k8s.io/yaml@v1.4.0?type=module"></dependency>
+    </dependency>
+    <dependency ref="pkg:golang/github.com/prometheus/client_golang@v1.16.0?type=module">
+      <dependency ref="pkg:golang/github.com/beorn7/perks@v1.0.1?type=module"></dependency>
+      <dependency ref="pkg:golang/github.com/cespare/xxhash/v2@v2.2.0?type=module"></dependency>
+      <dependency ref="pkg:golang/github.com/golang/protobuf@v1.5.3?type=module"></dependency>
+      <dependency ref="pkg:golang/github.com/matttproud/golang_protobuf_extensions@v1.0.4?type=module"></dependency>
+      <dependency ref="pkg:golang/github.com/prometheus/client_model@v0.3.0?type=module"></dependency>
+      <dependency ref="pkg:golang/github.com/prometheus/common@v0.42.0?type=module"></dependency>
+      <dependency ref="pkg:golang/github.com/prometheus/procfs@v0.10.1?type=module"></dependency>
+      <dependency ref="pkg:golang/golang.org/x/net@v0.19.0?type=module"></dependency>
+      <dependency ref="pkg:golang/golang.org/x/sys@v0.15.0?type=module"></dependency>
+      <dependency ref="pkg:golang/golang.org/x/text@v0.14.0?type=module"></dependency>
+      <dependency ref="pkg:golang/google.golang.org/protobuf@v1.31.0?type=module"></dependency>
+      <dependency ref="pkg:golang/gopkg.in/yaml.v2@v2.4.0?type=module"></dependency>
+    </dependency>
+    <dependency ref="pkg:golang/github.com/prometheus/client_model@v0.3.0?type=module">
+      <dependency ref="pkg:golang/github.com/golang/protobuf@v1.5.3?type=module"></dependency>
+    </dependency>
+    <dependency ref="pkg:golang/github.com/prometheus/common@v0.42.0?type=module">
+      <dependency ref="pkg:golang/github.com/beorn7/perks@v1.0.1?type=module"></dependency>
+      <dependency ref="pkg:golang/github.com/cespare/xxhash/v2@v2.2.0?type=module"></dependency>
+      <dependency ref="pkg:golang/github.com/golang/protobuf@v1.5.3?type=module"></dependency>
+      <dependency ref="pkg:golang/github.com/matttproud/golang_protobuf_extensions@v1.0.4?type=module"></dependency>
+      <dependency ref="pkg:golang/github.com/prometheus/client_golang@v1.16.0?type=module"></dependency>
+      <dependency ref="pkg:golang/github.com/prometheus/client_model@v0.3.0?type=module"></dependency>
+      <dependency ref="pkg:golang/github.com/prometheus/procfs@v0.10.1?type=module"></dependency>
+      <dependency ref="pkg:golang/golang.org/x/net@v0.19.0?type=module"></dependency>
+      <dependency ref="pkg:golang/golang.org/x/sys@v0.15.0?type=module"></dependency>
+      <dependency ref="pkg:golang/golang.org/x/text@v0.14.0?type=module"></dependency>
+      <dependency ref="pkg:golang/google.golang.org/protobuf@v1.31.0?type=module"></dependency>
+      <dependency ref="pkg:golang/gopkg.in/yaml.v2@v2.4.0?type=module"></dependency>
+    </dependency>
+    <dependency ref="pkg:golang/github.com/prometheus/procfs@v0.10.1?type=module">
+      <dependency ref="pkg:golang/golang.org/x/sync@v0.4.0?type=module"></dependency>
+      <dependency ref="pkg:golang/golang.org/x/sys@v0.15.0?type=module"></dependency>
+    </dependency>
+    <dependency ref="pkg:golang/github.com/rcrowley/go-metrics@v0.0.0-20200313005456-10cdbea86bc0?type=module"></dependency>
+    <dependency ref="pkg:golang/github.com/redis/go-redis/v9@v9.4.0?type=module">
+      <dependency ref="pkg:golang/github.com/cespare/xxhash/v2@v2.2.0?type=module"></dependency>
+      <dependency ref="pkg:golang/github.com/dgryski/go-rendezvous@v0.0.0-20200823014737-9f7001d12a5f?type=module"></dependency>
+    </dependency>
+    <dependency ref="pkg:golang/github.com/remyoudompheng/bigfft@v0.0.0-20230129092748-24d4a6f8daec?type=module"></dependency>
+    <dependency ref="pkg:golang/github.com/sirupsen/logrus@v1.9.3?type=module">
+      <dependency ref="pkg:golang/golang.org/x/sys@v0.15.0?type=module"></dependency>
+    </dependency>
+    <dependency ref="pkg:golang/github.com/tchap/go-patricia/v2@v2.3.1?type=module"></dependency>
+    <dependency ref="pkg:golang/github.com/xeipuuv/gojsonpointer@v0.0.0-20190905194746-02993c407bfb?type=module"></dependency>
+    <dependency ref="pkg:golang/github.com/xeipuuv/gojsonreference@v0.0.0-20180127040603-bd5ef7bd5415?type=module"></dependency>
+    <dependency ref="pkg:golang/github.com/yashtewari/glob-intersection@v0.2.0?type=module"></dependency>
+    <dependency ref="pkg:golang/go.opentelemetry.io/otel@v1.21.0?type=module">
+      <dependency ref="pkg:golang/github.com/go-logr/logr@v1.3.0?type=module"></dependency>
+      <dependency ref="pkg:golang/github.com/go-logr/stdr@v1.2.2?type=module"></dependency>
+      <dependency ref="pkg:golang/go.opentelemetry.io/otel/metric@v1.21.0?type=module"></dependency>
+      <dependency ref="pkg:golang/go.opentelemetry.io/otel/trace@v1.21.0?type=module"></dependency>
+    </dependency>
+    <dependency ref="pkg:golang/go.opentelemetry.io/otel/metric@v1.21.0?type=module">
+      <dependency ref="pkg:golang/github.com/go-logr/logr@v1.3.0?type=module"></dependency>
+      <dependency ref="pkg:golang/github.com/go-logr/stdr@v1.2.2?type=module"></dependency>
+      <dependency ref="pkg:golang/go.opentelemetry.io/otel@v1.21.0?type=module"></dependency>
+      <dependency ref="pkg:golang/go.opentelemetry.io/otel/trace@v1.21.0?type=module"></dependency>
+    </dependency>
+    <dependency ref="pkg:golang/go.opentelemetry.io/otel/sdk@v1.21.0?type=module">
+      <dependency ref="pkg:golang/github.com/go-logr/logr@v1.3.0?type=module"></dependency>
+      <dependency ref="pkg:golang/github.com/go-logr/stdr@v1.2.2?type=module"></dependency>
+      <dependency ref="pkg:golang/go.opentelemetry.io/otel@v1.21.0?type=module"></dependency>
+      <dependency ref="pkg:golang/go.opentelemetry.io/otel/metric@v1.21.0?type=module"></dependency>
+      <dependency ref="pkg:golang/go.opentelemetry.io/otel/trace@v1.21.0?type=module"></dependency>
+      <dependency ref="pkg:golang/golang.org/x/sys@v0.15.0?type=module"></dependency>
+    </dependency>
+    <dependency ref="pkg:golang/go.opentelemetry.io/otel/trace@v1.21.0?type=module">
+      <dependency ref="pkg:golang/go.opentelemetry.io/otel@v1.21.0?type=module"></dependency>
+    </dependency>
+    <dependency ref="pkg:golang/golang.org/x/crypto@v0.16.0?type=module">
+      <dependency ref="pkg:golang/golang.org/x/net@v0.19.0?type=module"></dependency>
+      <dependency ref="pkg:golang/golang.org/x/sys@v0.15.0?type=module"></dependency>
+      <dependency ref="pkg:golang/golang.org/x/text@v0.14.0?type=module"></dependency>
+    </dependency>
+    <dependency ref="pkg:golang/golang.org/x/mod@v0.8.0?type=module">
+      <dependency ref="pkg:golang/golang.org/x/tools@v0.6.0?type=module"></dependency>
+    </dependency>
+    <dependency ref="pkg:golang/golang.org/x/net@v0.19.0?type=module">
+      <dependency ref="pkg:golang/golang.org/x/crypto@v0.16.0?type=module"></dependency>
+      <dependency ref="pkg:golang/golang.org/x/sys@v0.15.0?type=module"></dependency>
+      <dependency ref="pkg:golang/golang.org/x/text@v0.14.0?type=module"></dependency>
+    </dependency>
+    <dependency ref="pkg:golang/golang.org/x/sync@v0.4.0?type=module"></dependency>
+    <dependency ref="pkg:golang/golang.org/x/sys@v0.15.0?type=module"></dependency>
+    <dependency ref="pkg:golang/golang.org/x/text@v0.14.0?type=module">
+      <dependency ref="pkg:golang/golang.org/x/mod@v0.8.0?type=module"></dependency>
+      <dependency ref="pkg:golang/golang.org/x/sys@v0.15.0?type=module"></dependency>
+      <dependency ref="pkg:golang/golang.org/x/tools@v0.6.0?type=module"></dependency>
+    </dependency>
+    <dependency ref="pkg:golang/golang.org/x/tools@v0.6.0?type=module">
+      <dependency ref="pkg:golang/golang.org/x/mod@v0.8.0?type=module"></dependency>
+      <dependency ref="pkg:golang/golang.org/x/net@v0.19.0?type=module"></dependency>
+      <dependency ref="pkg:golang/golang.org/x/sync@v0.4.0?type=module"></dependency>
+      <dependency ref="pkg:golang/golang.org/x/sys@v0.15.0?type=module"></dependency>
+    </dependency>
+    <dependency ref="pkg:golang/google.golang.org/protobuf@v1.31.0?type=module">
+      <dependency ref="pkg:golang/github.com/golang/protobuf@v1.5.3?type=module"></dependency>
+    </dependency>
+    <dependency ref="pkg:golang/gopkg.in/yaml.v2@v2.4.0?type=module"></dependency>
+    <dependency ref="pkg:golang/lukechampine.com/uint128@v1.2.0?type=module"></dependency>
+    <dependency ref="pkg:golang/modernc.org/cc/v3@v3.40.0?type=module">
+      <dependency ref="pkg:golang/github.com/dustin/go-humanize@v1.0.1?type=module"></dependency>
+      <dependency ref="pkg:golang/github.com/remyoudompheng/bigfft@v0.0.0-20230129092748-24d4a6f8daec?type=module"></dependency>
+      <dependency ref="pkg:golang/lukechampine.com/uint128@v1.2.0?type=module"></dependency>
+      <dependency ref="pkg:golang/modernc.org/mathutil@v1.6.0?type=module"></dependency>
+      <dependency ref="pkg:golang/modernc.org/strutil@v1.1.3?type=module"></dependency>
+      <dependency ref="pkg:golang/modernc.org/token@v1.0.1?type=module"></dependency>
+    </dependency>
+    <dependency ref="pkg:golang/modernc.org/ccgo/v3@v3.16.13?type=module">
+      <dependency ref="pkg:golang/github.com/dustin/go-humanize@v1.0.1?type=module"></dependency>
+      <dependency ref="pkg:golang/github.com/google/uuid@v1.5.0?type=module"></dependency>
+      <dependency ref="pkg:golang/github.com/kballard/go-shellquote@v0.0.0-20180428030007-95032a82bc51?type=module"></dependency>
+      <dependency ref="pkg:golang/github.com/mattn/go-isatty@v0.0.16?type=module"></dependency>
+      <dependency ref="pkg:golang/github.com/remyoudompheng/bigfft@v0.0.0-20230129092748-24d4a6f8daec?type=module"></dependency>
+      <dependency ref="pkg:golang/golang.org/x/mod@v0.8.0?type=module"></dependency>
+      <dependency ref="pkg:golang/golang.org/x/sys@v0.15.0?type=module"></dependency>
+      <dependency ref="pkg:golang/golang.org/x/tools@v0.6.0?type=module"></dependency>
+      <dependency ref="pkg:golang/lukechampine.com/uint128@v1.2.0?type=module"></dependency>
+      <dependency ref="pkg:golang/modernc.org/cc/v3@v3.40.0?type=module"></dependency>
+      <dependency ref="pkg:golang/modernc.org/libc@v1.29.0?type=module"></dependency>
+      <dependency ref="pkg:golang/modernc.org/mathutil@v1.6.0?type=module"></dependency>
+      <dependency ref="pkg:golang/modernc.org/memory@v1.7.2?type=module"></dependency>
+      <dependency ref="pkg:golang/modernc.org/opt@v0.1.3?type=module"></dependency>
+      <dependency ref="pkg:golang/modernc.org/strutil@v1.1.3?type=module"></dependency>
+      <dependency ref="pkg:golang/modernc.org/token@v1.0.1?type=module"></dependency>
+    </dependency>
+    <dependency ref="pkg:golang/modernc.org/libc@v1.29.0?type=module">
+      <dependency ref="pkg:golang/github.com/dustin/go-humanize@v1.0.1?type=module"></dependency>
+      <dependency ref="pkg:golang/github.com/google/uuid@v1.5.0?type=module"></dependency>
+      <dependency ref="pkg:golang/github.com/mattn/go-isatty@v0.0.16?type=module"></dependency>
+      <dependency ref="pkg:golang/github.com/remyoudompheng/bigfft@v0.0.0-20230129092748-24d4a6f8daec?type=module"></dependency>
+      <dependency ref="pkg:golang/golang.org/x/sys@v0.15.0?type=module"></dependency>
+      <dependency ref="pkg:golang/modernc.org/mathutil@v1.6.0?type=module"></dependency>
+      <dependency ref="pkg:golang/modernc.org/memory@v1.7.2?type=module"></dependency>
+    </dependency>
+    <dependency ref="pkg:golang/modernc.org/mathutil@v1.6.0?type=module">
+      <dependency ref="pkg:golang/github.com/remyoudompheng/bigfft@v0.0.0-20230129092748-24d4a6f8daec?type=module"></dependency>
+    </dependency>
+    <dependency ref="pkg:golang/modernc.org/memory@v1.7.2?type=module">
+      <dependency ref="pkg:golang/github.com/remyoudompheng/bigfft@v0.0.0-20230129092748-24d4a6f8daec?type=module"></dependency>
+      <dependency ref="pkg:golang/modernc.org/mathutil@v1.6.0?type=module"></dependency>
+    </dependency>
+    <dependency ref="pkg:golang/modernc.org/opt@v0.1.3?type=module"></dependency>
+    <dependency ref="pkg:golang/modernc.org/sqlite@v1.28.0?type=module">
+      <dependency ref="pkg:golang/github.com/dustin/go-humanize@v1.0.1?type=module"></dependency>
+      <dependency ref="pkg:golang/github.com/google/uuid@v1.5.0?type=module"></dependency>
+      <dependency ref="pkg:golang/github.com/kballard/go-shellquote@v0.0.0-20180428030007-95032a82bc51?type=module"></dependency>
+      <dependency ref="pkg:golang/github.com/mattn/go-isatty@v0.0.16?type=module"></dependency>
+      <dependency ref="pkg:golang/github.com/remyoudompheng/bigfft@v0.0.0-20230129092748-24d4a6f8daec?type=module"></dependency>
+      <dependency ref="pkg:golang/golang.org/x/mod@v0.8.0?type=module"></dependency>
+      <dependency ref="pkg:golang/golang.org/x/sys@v0.15.0?type=module"></dependency>
+      <dependency ref="pkg:golang/golang.org/x/tools@v0.6.0?type=module"></dependency>
+      <dependency ref="pkg:golang/lukechampine.com/uint128@v1.2.0?type=module"></dependency>
+      <dependency ref="pkg:golang/modernc.org/cc/v3@v3.40.0?type=module"></dependency>
+      <dependency ref="pkg:golang/modernc.org/ccgo/v3@v3.16.13?type=module"></dependency>
+      <dependency ref="pkg:golang/modernc.org/libc@v1.29.0?type=module"></dependency>
+      <dependency ref="pkg:golang/modernc.org/mathutil@v1.6.0?type=module"></dependency>
+      <dependency ref="pkg:golang/modernc.org/memory@v1.7.2?type=module"></dependency>
+      <dependency ref="pkg:golang/modernc.org/opt@v0.1.3?type=module"></dependency>
+      <dependency ref="pkg:golang/modernc.org/strutil@v1.1.3?type=module"></dependency>
+      <dependency ref="pkg:golang/modernc.org/token@v1.0.1?type=module"></dependency>
+    </dependency>
+    <dependency ref="pkg:golang/modernc.org/strutil@v1.1.3?type=module">
+      <dependency ref="pkg:golang/github.com/remyoudompheng/bigfft@v0.0.0-20230129092748-24d4a6f8daec?type=module"></dependency>
+      <dependency ref="pkg:golang/modernc.org/mathutil@v1.6.0?type=module"></dependency>
+    </dependency>
+    <dependency ref="pkg:golang/modernc.org/token@v1.0.1?type=module"></dependency>
+    <dependency ref="pkg:golang/sigs.k8s.io/yaml@v1.4.0?type=module"></dependency>
+  </dependencies>
+</bom>

@@ -1,0 +1,7 @@
+-- 007_swarm_verification_fields.sql
+
+ALTER TABLE agents
+ADD COLUMN IF NOT EXISTS swarm_confidence_score DECIMAL(5,2) NULL,
+ADD COLUMN IF NOT EXISTS swarm_verdict VARCHAR(50) NULL,
+ADD COLUMN IF NOT EXISTS swarm_reasons JSONB NULL,
+ADD COLUMN IF NOT EXISTS verified_at TIMESTAMP WITH TIME ZONE NULL;

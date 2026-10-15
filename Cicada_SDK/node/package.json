@@ -1,0 +1,28 @@
+{
+  "name": "@cicada/sdk",
+  "version": "0.2.0",
+  "description": "Node.js SDK for the Cicada AI Agent Governance Platform",
+  "main": "src/index.js",
+  "types": "src/index.d.ts",
+  "scripts": {
+    "test": "node --test src/**/*.test.js",
+    "lint": "eslint src/"
+  },
+  "keywords": ["ai", "agent", "security", "governance", "cicada", "llm", "guardrails"],
+  "author": "Cicada Platform Team",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "js-yaml": "^4.1.0"
+  },
+  "devDependencies": {
+    "eslint": "^9.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/cicada-platform/cicada-sdk-node"
+  },
+  "homepage": "https://cicada.dev"
+}

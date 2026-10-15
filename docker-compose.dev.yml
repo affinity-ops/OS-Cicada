@@ -1,0 +1,155 @@
+# © 2026 Affinity Ops Ltd. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+# Cicada Platform — Local Development Stack
+# 
+# This Compose file spins up the full Cicada stack for local development
+# and SDK testing. The Gateway starts in Shadow Mode by default —
+# all seven enforcement layers are computed and logged, but no traffic
+# is blocked. Set SHADOW_MODE=false to enable full enforcement.
+#
+# Usage:
+#   docker compose up -d           # Start all services
+#   cicada test                    # Or use the CLI
+#   SHADOW_MODE=false docker compose up -d  # Full enforcement
+#
+# Architecture:
+#   ┌─────────────┐    ┌──────────────────┐    ┌──────────────┐
+#   │ Your Agent  │───▶│ Sentry Gateway   │───▶│ Target APIs  │
+#   │ (SDK client)│    │ :8080 (shadow)   │    │ (Stripe etc) │
+#   └─────────────┘    └──────────────────┘    └──────────────┘
+#          │                    │
+#          │           ┌───────┴───────┐
+#          │           │               │
+#          │    ┌──────▼──────┐ ┌──────▼──────┐
+#          │    │ PostgreSQL  │ │    Redis     │
+#          │    │ :5432       │ │ :6379       │
+#          │    └─────────────┘ └─────────────┘
+#          │
+#   ┌──────▼──────────┐
+#   │ Operator Dash   │
+#   │ :3000           │
+#   └─────────────────┘
+
+services:
+  # ── Infrastructure ─────────────────────────────────────────────
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: cicada
+      POSTGRES_USER: cicada
+      POSTGRES_PASSWORD: cicada_dev
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cicada"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # ── Core API (Laravel) ─────────────────────────────────────────
+
+  core-api:
+    build:
+      context: ./Core_API
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      APP_ENV: local
+      APP_DEBUG: "true"
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_DATABASE: cicada
+      DB_USERNAME: cicada
+      DB_PASSWORD: cicada_dev
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      GATEWAY_SECRET: ${GATEWAY_SECRET:-cicada-dev-secret}
+      OPERATOR_KEY: ${OPERATOR_KEY:-cicada-operator-dev}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # ── Sentry Gateway ─────────────────────────────────────────────
+
+  gateway:
+    build:
+      context: ./Sentry_Gateway
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      CICADA_CORE_API_URL: http://core-api:8000
+      CICADA_REDIS_URL: redis:6379
+      CICADA_LEDGER_PATH: /data/edge_ledger.db
+      GATEWAY_SECRET: ${GATEWAY_SECRET:-cicada-dev-secret}
+      SHADOW_MODE: ${SHADOW_MODE:-true}
+      # Integrity monitor runs every 5 minutes in dev (1h in prod)
+      CICADA_INTEGRITY_INTERVAL: 5m
+    volumes:
+      - ledger-data:/data
+    depends_on:
+      - core-api
+      - redis
+
+  # ── Operator Dashboard ─────────────────────────────────────────
+
+  dashboard:
+    build:
+      context: ./dashboard
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      NEXT_PUBLIC_API_URL: http://core-api:8000
+      NEXT_PUBLIC_GATEWAY_URL: http://gateway:8080
+      OPERATOR_KEY: ${OPERATOR_KEY:-cicada-operator-dev}
+    depends_on:
+      - core-api
+
+  # ── Developer Portal ───────────────────────────────────────────
+
+  developer-portal:
+    build:
+      context: ./Developer_Portal
+      dockerfile: Dockerfile
+    ports:
+      - "3001:3001"
+    environment:
+      NEXT_PUBLIC_API_URL: http://core-api:8000
+      NEXT_PUBLIC_GATEWAY_URL: http://gateway:8080
+    depends_on:
+      - core-api
+
+  # ── Gateway Portal ─────────────────────────────────────────────
+
+  gateway-portal:
+    build:
+      context: ./Gateway_Portal
+      dockerfile: Dockerfile
+    ports:
+      - "3002:3002"
+    environment:
+      NEXT_PUBLIC_GATEWAY_URL: http://gateway:8080
+    depends_on:
+      - gateway
+
+volumes:
+  pgdata:
+  ledger-data:

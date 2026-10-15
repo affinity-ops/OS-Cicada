@@ -1,0 +1,77 @@
+# Binaries
+cicada_sentry
+cicada-sentry
+*.exe
+Sentry_Gateway/sentry
+Sentry_Gateway/bin/
+Sentry_Gateway/cmd/sentry/sentry
+Shadow_Sandbox/sandbox
+Mesh_Directory/mesh-directory
+Licensing_Authority/mint
+
+# Keys — NEVER commit private keys
+*.key
+sentry_ed25519.key
+Sentry_Gateway/sentry_ed25519.key
+Licensing_Authority/master_keys.json
+
+# Secrets
+.env
+.env.local
+.env.*.local
+Core_API/.env
+Sentry_Gateway/.env
+
+# Service account credentials — NEVER commit
+*-service-account.json
+firebase-service-account.json
+*.lic
+
+# Python
+venv/
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+
+# Go
+vendor/
+
+# Database artifacts
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+Master_Admin_Panel/data/*.json
+
+# Logs and runtime state
+logs/
+sentry.log
+.fleet_pids
+*.log
+
+# IDE
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# Build artifacts
+Sentry_Gateway/release/payload/
+build/
+composer.phar
+
+# Node
+node_modules/
+.next/
+Ciba_Flutter_App/apk_server/*.apk
+Ciba_Flutter_App/build/
+Developer_Portal/public/*.apk
+Gateway_Portal/public/*.apk
+playwright-report/
+test-results/
+
+# Turborepo
+.turbo/

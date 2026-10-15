@@ -1,0 +1,65 @@
+# © 2026 Affinity Ops Ltd. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+# cicada.yaml — Cicada Agent Governance Policy
+# Template: Node.js Notification Agent
+# Risk Level: Low (SendGrid email + Slack messaging, velocity-limited)
+
+apiVersion: cicada/v1
+kind: AgentPolicy
+
+identity:
+  name: "notification-dispatcher-agent"
+  description: "Notification dispatcher agent that sends emails via SendGrid and messages via Slack. Low-risk, velocity-limited to prevent spam and abuse."
+  type: semi-autonomous
+  role: processor
+  owner: platform-team@acme.com
+  business_unit: platform
+  data_classification: internal
+  criticality: low
+
+tools:
+  - name: sendgrid-email
+    description: "Send emails via SendGrid API"
+    url_patterns:
+      - "https://api.sendgrid.com/v3/mail/send"
+    methods: [POST]
+    risk_level: medium
+
+  - name: slack-message
+    description: "Post messages to Slack channels"
+    url_patterns:
+      - "https://slack.com/api/chat.postMessage"
+      - "https://slack.com/api/chat.update"
+    methods: [POST]
+    risk_level: low
+
+  - name: notification-templates
+    description: "Retrieve notification templates from internal API"
+    url_patterns:
+      - "https://api.internal.acme.com/v1/templates/*"
+    methods: [GET]
+    risk_level: low
+
+enforcement:
+  velocity:
+    max_reads_per_minute: 100
+    max_writes_per_minute: 30   # Limit outbound notifications
+    max_deletes_per_minute: 0
+    circuit_breaker_threshold: 15
+  hitl:
+    enabled: false
+    timeout_seconds: 3600
+    auto_deny_on_timeout: true
+    risk_threshold: 0.8
+  shadow_mode: false
+  destructive_capability: false
+
+provenance:
+  evar_binding: true
+  content_tagging: false
+  audit_retention_days: 180
+
+compliance:
+  frameworks: [SOC2, GDPR]
+  regulatory_region: GLOBAL

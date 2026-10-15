@@ -1,0 +1,46 @@
+{
+  "versions": {
+    "cicada/v1": {
+      "schema_file": "cicada-policy-v1.json",
+      "status": "stable",
+      "released": "2026-03-15",
+      "deprecated": null,
+      "sunset": null,
+      "features": [
+        "identity (name, type, role, owner, business_unit, data_classification, criticality)",
+        "tools (url_patterns, methods, destructive, risk_level)",
+        "enforcement (velocity, hitl, shadow_mode, destructive_capability)",
+        "provenance (evar_binding, content_tagging, audit_retention_days)",
+        "compliance (frameworks, regulatory_region, budget_cap_usd, cost_centre)"
+      ]
+    },
+    "cicada/v2": {
+      "schema_file": "cicada-policy-v2.json",
+      "status": "draft",
+      "released": null,
+      "deprecated": null,
+      "sunset": null,
+      "features": [
+        "Everything in v1",
+        "user_context (delegation_chain, identity_binding)",
+        "tool_groups (named groups of tools for batch policy application)",
+        "guardrails (custom_guardrails, regex_blocklist, token_budget)",
+        "networking (egress_allowlist, dns_pinning)",
+        "policy_inheritance (extends parent policy by reference)"
+      ],
+      "migration_notes": "v1 policies are fully compatible with v2. New fields are additive."
+    }
+  },
+  "latest_stable": "cicada/v1",
+  "upgrade_policy": {
+    "backwards_compatible": true,
+    "deprecation_notice_days": 180,
+    "sunset_after_deprecation_days": 365,
+    "strategy": "Additive-only — new fields are always optional with sensible defaults. Removing or renaming fields requires a major version bump with deprecation shim."
+  },
+  "validation_rules": {
+    "unknown_version": "reject with error listing available versions",
+    "deprecated_version": "warn but accept, log deprecation notice to audit ledger",
+    "sunset_version": "reject with upgrade instructions"
+  }
+}

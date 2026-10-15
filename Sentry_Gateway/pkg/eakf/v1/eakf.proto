@@ -1,0 +1,78 @@
+// © 2026 Affinity Ops Ltd. All rights reserved.
+// SPDX-License-Identifier: Apache-2.0
+
+// Proto contract for the Ephemeral Agent Kernel Firewall (EAKF).
+//
+// This file defines the gRPC service interface between the Sentry Gateway
+// (client) and the eakfd daemon (server). The Gateway connects over a UNIX
+// Domain Socket at /var/run/cicada/eakf.sock by default.
+//
+// Source of truth: Cicada_Documentation/Technical_Truth/EPHEMERAL_AGENT_KERNEL_FIREWALL.md
+// Section 7.5 — gRPC Service Interface Definition
+//
+// This contract is pinned. Changes require a CHANGELOG entry in
+// EAKF_CHANGELOG.md with rationale and blueprint section reference.
+
+syntax = "proto3";
+
+package cicada.eakf.v1;
+
+option go_package = "github.com/asai/cicada/sentry/pkg/eakf/v1;eakfv1";
+
+// EphemeralAgentKernelFirewall coordinates secure tool execution sandboxes.
+service EphemeralAgentKernelFirewall {
+    // Execute runs the provided script payload within an isolated guest container/microVM.
+    rpc Execute(ExecuteRequest) returns (ExecuteResponse);
+}
+
+// ExecuteRequest defines the input code payload and virtual resource boundaries.
+message ExecuteRequest {
+    string saga_id = 1;
+    string agent_id = 2;
+    string tenant_id = 3;
+    
+    // Script or configuration content (e.g. Terraform payload, Python REPL script).
+    string payload = 4;
+    // Execution runtime hint (e.g. "python3", "bash", "terraform").
+    string runtime_hint = 5;
+    
+    // Sandbox resource limits.
+    int32 timeout_seconds = 6;
+    int32 max_memory_mb = 7;
+    int32 max_cpus = 8;
+    
+    // Allowlisted egress destinations bridged to the host proxy routing table.
+    repeated string allowed_egress_domains = 9;
+    repeated string allowed_infra_scopes = 10;
+    
+    // Serialized JSON of the agent's policy manifest (e.g. tools, scopes, limits)
+    // to allow eakfd to make autonomous scrubbing decisions without back-channel calls.
+    bytes policy_manifest_json = 11;
+}
+
+// ExecuteResponse defines the execution results, exit codes, and telemetry logs.
+message ExecuteResponse {
+    string saga_id = 1;
+    
+    // Process outcome signals.
+    int32 exit_code = 2;
+    bool execution_success = 3;
+    
+    // Sanitized console outputs (credentials, state maps, private IPs stripped).
+    string sanitized_stdout = 4;
+    string sanitized_stderr = 5;
+    
+    // Scrub telemetry mapping what was filtered.
+    repeated string redacted_keys = 6;
+    repeated string redacted_ips = 7;
+    
+    // Saga state indicators.
+    enum Status {
+        STATUS_UNSPECIFIED = 0;
+        STATUS_SUCCESS = 1;
+        STATUS_FAILED = 2;
+        STATUS_PARTIAL_APPLY = 3;
+        STATUS_TIMEOUT = 4;
+    }
+    Status status = 8;
+}

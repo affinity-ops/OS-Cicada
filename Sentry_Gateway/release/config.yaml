@@ -1,0 +1,32 @@
+# © 2026 Affinity Ops Ltd. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+# =========================================================================
+# Cicada Sentry Node Configuration File
+# 
+# Instructions: This file is loaded dynamically when the sentry service 
+# initializes. Adjust mappings corresponding to your VPC layout.
+# =========================================================================
+
+gateway:
+  bind_address: "0.0.0.0"
+  port: 8080
+  sla_threshold_ms: 5
+
+aegis_bridge:
+  enabled: true
+  rpc_endpoint: "http://10.0.1.55:9000/aegis/rpc"
+  master_signature: "AEGIS_MASTER_SIG_0X445C" # RE-GENERATE THIS FOR PRODUCTION
+
+gossip_mesh:
+  # Identifies this local node in a global mesh swarm
+  node_name: "sentry-node-alpha-1"
+  port: 7946
+  discovery_endpoint: "10.0.2.1:7946"
+
+security:
+  # If true, blocks outside hits to the /v1/aegis/mcp/execute port boundary
+  enforce_strict_mcp_perimeter: true
+  allow_vpc_subnets:
+    - "127.0.0.1/32"
+    - "10.0.1.0/24"
