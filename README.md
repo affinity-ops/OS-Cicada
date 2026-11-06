@@ -213,16 +213,17 @@ While `Sentry_Gateway` can run completely standalone as a single Go binary, the 
 | **[`Licensing_Authority`](./Licensing_Authority)** | Hybrid Ed25519 + NIST FIPS 204 ML-DSA-65 cryptographic license minter | Go (`cloudflare/circl`) |
 | **[`Cicada_SDK`](./Cicada_SDK)** | Drop-in client SDKs for LangChain, CrewAI, AutoGen, OpenAI & MCP servers | Python & Node.js / TypeScript |
 
-### Launching the Full Stack with Docker Compose
+### Launching the Full Stack (Docker Compose or Native Fleet Script)
 ```bash
-# 1. Copy example environment configuration
+# Option A: Docker Compose
+cp .env.example .env
 cp Core_API/.env.example Core_API/.env
-
-# 2. Boot PostgreSQL, Redis, Core API, EAKF Daemon, Sentry Gateway, and Portals
 docker compose up --build -d
-
-# 3. Run database migrations
 docker compose exec core-api php artisan migrate --force
+
+# Option B: Native Local Fleet (PostgreSQL + Redis on host)
+cp .env.example .env
+./start_fleet.sh      # Stop anytime with: ./stop_fleet.sh
 ```
 
 ---

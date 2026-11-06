@@ -17,6 +17,8 @@ import (
 
 func setupSimulationTestEnv(t *testing.T) {
 	t.Helper()
+	t.Setenv("CICADA_SIMULATION_MODE", "true")
+	t.Setenv("CICADA_DEV_MODE", "true")
 	var err error
 	opaEngine, err = policy.NewEngine(context.Background(), "")
 	if err != nil {

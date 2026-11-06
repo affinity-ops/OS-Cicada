@@ -47,6 +47,20 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
+// shouldFailClosedOnNilRedis determines whether a missing Redis connection
+// should block requests. Production defaults to fail-closed (true), while
+// explicit CICADA_FAIL_CLOSED=false or standalone simulation/dev mode
+// (when CICADA_FAIL_CLOSED is not explicitly "true") allows zero-dependency operation.
+func shouldFailClosedOnNilRedis() bool {
+	if v := os.Getenv("CICADA_FAIL_CLOSED"); v != "" {
+		return v != "false"
+	}
+	if os.Getenv("CICADA_SIMULATION_MODE") == "true" || os.Getenv("CICADA_DEV_MODE") == "true" {
+		return false
+	}
+	return true
+}
+
 // WindowSeconds is the per-window duration — one window = one minute.
 // This is the unit over which calls are counted and stored historically.
 const WindowSeconds = 60
@@ -138,7 +152,7 @@ func checkWithWeight(ctx context.Context, agentID, httpMethod string, weight int
 
 	if queue.Client == nil {
 		log.Printf("[VELOCITY] Redis not available for agent %s", agentID)
-		failClosed := os.Getenv("CICADA_FAIL_CLOSED") != "false"
+		failClosed := shouldFailClosedOnNilRedis()
 		return Result{Exceeded: failClosed, CurrentRate: 0, Threshold: staticThreshold, WindowSecs: WindowSeconds, CounterType: counterType, Mode: "static"}
 	}
 
@@ -207,7 +221,7 @@ func Check(ctx context.Context, agentID, httpMethod string) Result {
 
 	if queue.Client == nil {
 		log.Printf("[VELOCITY] Redis not available for agent %s", agentID)
-		failClosed := os.Getenv("CICADA_FAIL_CLOSED") != "false"
+		failClosed := shouldFailClosedOnNilRedis()
 		return Result{Exceeded: failClosed, CurrentRate: 0, Threshold: staticThreshold, WindowSecs: WindowSeconds, CounterType: counterType, Mode: "static"}
 	}
 
