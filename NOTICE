@@ -1,12 +1,28 @@
-Cicada Zero-Trust Agent Gateway Architecture
-Copyright 2026 Affinity Ops Ltd. / Patrick Matthews
+Cicada: Zero-Trust Runtime Enforcement Gateway & Matthews Enforcement Framework (MEF)
+Copyright 2026 Patrick Matthews & Affinity Ops Ltd. All rights reserved.
 
-This product includes software developed by Patrick Matthews and Affinity Ops Ltd.
-All rights reserved.
+MANDATORY ATTRIBUTION NOTICE (Pursuant to Apache License 2.0, Section 4(c) and Section 4(d)):
+This product includes software, architectural specifications, and security enforcement
+models conceived, designed, and developed by:
 
-Original Systems Architect & Inventor: Patrick Matthews
-Platform Engineering & Architecture: Affinity Ops Ltd.
+  Original Creator, Systems Architect & Inventor: Patrick Matthews
+  Organization: Affinity Ops Ltd.
+  Repository: https://github.com/affinity-ops/OS-Cicada
 
-For academic and prior art citation:
-- Zenodo Preprint DOI: 10.5281/zenodo.cicada-agent-gateway
-- Technical Truth Specifications: /docs/Platform_Documentation.md
+Any reproduction, clone, fork, modification, redistribution, or Derivative Work
+(whether in Source or Object form, standalone or embedded within another product or
+service) MUST retain this NOTICE file in full and MUST prominently display the following
+attribution in all associated documentation, README files, user interfaces, or
+distribution materials:
+
+  "Built upon the Cicada Zero-Trust Agent Gateway and the Matthews Enforcement
+   Framework (MEF), originally architected and developed by Patrick Matthews
+   (Affinity Ops Ltd.)."
+
+Academic, Research & Prior-Art Citation Requirement:
+  Matthews, P. (2026). The Matthews Enforcement Framework (MEF): A Deterministic
+  Mathematical Model for Zero-Trust Autonomous Agent Governance.
+  - Zenodo DOI: https://doi.org/10.5281/zenodo.19597120
+  - SSRN ID: https://papers.ssrn.com/sol3/papers.cfm?abstract_id=6612798
+  - Technical Specification: /docs/MATTHEWS_ENFORCEMENT_FRAMEWORK.md
+

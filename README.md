@@ -6,7 +6,15 @@
 [![OWASP Agentic Top 10](https://img.shields.io/badge/OWASP_Agentic_AI-ASI01--ASI10-emerald.svg)](./docs/ARCHITECTURE_DEEP_DIVE.md)
 [![Latency p95](https://img.shields.io/badge/p95_Latency-19ms-brightgreen.svg)](#performance-benchmarks-k6-load-test)
 
-> ⚠️ **IMPORTANT DISCLOSURE:** This is an experimental project born out of pure necessity. It was completely **vibe-coded** over 8 months using 2026 frontier LLMs directed by a single systems architect. It is a functional architectural proof-of-concept, not a polished enterprise software suite. It needs a cleanup, and it contains technical debt (such as monolithic handlers). **The plumbing is yours to fix; the blueprint is yours to use.**
+> ⚠️ **ARCHITECTURAL & SECURITY POSTURE DISCLOSURE (THE TRUTH OF THIS REPO):**
+> 1. **What This Project Is:** Cicada is an experimental, open-source architectural blueprint and working reference implementation developed over 8 months by a single systems architect (**Patrick Matthews**) orchestrating frontier LLMs. It is a functional architectural proof-of-concept—not a turnkey enterprise SaaS suite—and still contains areas of technical debt (such as large HTTP handler files in `cmd/sentry/main.go`). **The plumbing is yours to refine; the architecture is yours to build upon.**
+> 2. **How It Actually Deters Adaptive Attackers:** Recent research (*"The Attacker Moves Second"*, *CaMeL*, and *Meta's Agents Rule of Two*) has demonstrated that static regex lists and lexical intent classifiers alone can be bypassed by adaptive attackers who rephrase malicious instructions in benign business language. **Cicada does not rely on lexical heuristics alone.** While fast deterministic scanners (`internal/injection`, `internal/semantic`) serve as sub-millisecond tripwires for known attack patterns, the core security guarantees of `Sentry_Gateway` come from **structural capability constraints and cryptographic binding** wired across all five agent-facing proxy handlers (`/v1/agent/proxy`, `/v1/llm/proxy`, `/v1/ghost/proxy`, `/v1/simulate`, and `/v1/mcp/execute`):
+>    - **Meta's "Agents Rule of Two" Registration Gate (`internal/policy/sanitizer.go`):** Rejects (`RULE_OF_TWO_TRIFECTA`) any agent registration that combines *(A) untrusted input exposure*, *(B) sensitive data/system access*, and *(C) state mutation or external egress* in the same session without mandatory Human-in-the-Loop (`hitl_enabled: true`).
+>    - **CaMeL-Style Session Taint Tracking (`internal/taint`):** Tracks session data provenance in real time. The moment an agent session ingests untrusted external/RAG content or `role: "tool"` output in `/v1/llm/proxy`, the session is marked **tainted** (`cicada:taint:{agentID}`) and automatically loses autonomous privileges to mutate state (`POST`/`PUT`/`PATCH`/`DELETE`), execute financial transactions (`proxy:transact`), or send data externally without out-of-band human approval—regardless of how benign the payload looks.
+>    - **Server-Side Manifest Resolution & Unified 9-Layer Pipeline (`internal/pipeline`, `internal/agentcache`):** Tool identity, skill contracts, parameter schemas, and prerequisite chains are resolved strictly from the server-side registered manifest—never from client-supplied headers. Every handler executes the same 9-layer admission pipeline (`injection_scan`, `semantic_intent`, `velocity`, `drift_guard`, `prerequisite`, `tool_scope`, `blast_radius`, `tx_profile`, `camel_taint`).
+>    - **Cryptographic Payload-Bound CIBA Approvals (`internal/ciba`):** Out-of-band human approvals inspect the full untruncated request payload and bind approval tokens to a constant-time verified `SHA-256(Method | TargetURL | Body)` hash (`PayloadHash`), defeating payload-padding and TOCTOU substitution attacks.
+>
+> 📜 **MANDATORY ATTRIBUTION REQUIREMENT:** If you clone, fork, deploy, redistribute, or build derivative works from this repository or its architectural designs, **you are legally required under [Apache License 2.0 (§ 4(c) & § 4(d))](./LICENSE) and [NOTICE](./NOTICE) to prominently credit Patrick Matthews as the Original Creator & Systems Architect.** See [Mandatory Attribution & Citation](#-license-mandatory-attribution--legal-notice) below for exact wording.
 
 ---
 
@@ -24,8 +32,8 @@ You do **not** need PostgreSQL, Redis, Docker, or external LLM API keys to test 
 ```bash
 cd Sentry_Gateway
 
-# Option A: Run the automated 8-Gate Zero-Trust verification test suite
-go test -v ./cmd/sentry ./internal/license ./internal/injection ./internal/semantic ./internal/gossip
+# Option A: Run the Unified 9-Layer Admission Pipeline & Adaptive Attacker test suite
+go test -v ./cmd/sentry ./internal/pipeline ./internal/taint ./internal/policy ./internal/drift ./internal/prerequisite ./internal/agentcache ./internal/blastradius ./internal/txprofile ./internal/toolscope ./internal/license ./internal/injection ./internal/semantic ./internal/gossip
 
 # Option B: Boot the live standalone gateway on :8080 (zero external dependencies)
 CICADA_DEV_MODE=true CICADA_SIMULATION_MODE=true go run ./cmd/sentry
@@ -154,15 +162,15 @@ Cicada maps directly to the **OWASP Agentic Applications Top 10** in production 
 
 | OWASP ID | Threat Category | Cicada Enforcement Module (`Sentry_Gateway/internal/`) |
 | :--- | :--- | :--- |
-| **`ASI01`** | **Agent Goal Hijack** | `injection/` (7-stage recursive deobfuscator `deobfuscate.go` + 36 provenance-weighted patterns + hidden HTML DOM scanner), `semantic/` (Domain taxonomy & read-vs-mutation contradiction engine), `drift/` (Context shift detector) |
-| **`ASI02`** | **Tool Misuse & Exploitation** | `fga/` (Canonical URL/method policy), `policy/` (Embedded OPA Rego), `velocity/` (Destructive call sliding-window circuit breaker) |
+| **`ASI01`** | **Agent Goal Hijack** | `taint/` (**CaMeL-style session taint tracking & capability revocation** upon untrusted/tool output ingestion), `injection/` (7-stage recursive deobfuscator `deobfuscate.go` + 36 provenance-weighted patterns + hidden HTML DOM scanner), `semantic/` (Domain taxonomy & read-vs-mutation contradiction engine), `drift/` (Non-self-poisoning context shift detector) |
+| **`ASI02`** | **Tool Misuse & Exploitation** | `pipeline/` (**Unified 9-layer admission across all 5 gateway handlers**), `policy/sanitizer.go` (**Meta's "Agents Rule of Two" `RULE_OF_TWO_TRIFECTA` registration gate**), `prerequisite/` (Fail-closed post-upstream prerequisite ordering), `toolscope/` + `blastradius/` + `txprofile/` (Server-side parameter, SQL/bulk blast radius & transaction anomaly bounds), `fga/` + `velocity/` (Impact-weighted circuit breaker) |
 | **`ASI03`** | **Identity & Privilege Abuse** | `auth/` (Ed25519 EVAR tokens, RFC 9449 DPoP sender-constrained proofs, RFC 8693 ID-JAG human-context binding), `session/` (JIT 15m tokens) |
-| **`ASI04`** | **Supply Chain & Schema Mutation** | `agentcache/` (Strict JSON Schema contract validation for declared skills, `X-Cicada-Memory-Action: flush` on mutation) |
+| **`ASI04`** | **Supply Chain & Schema Mutation** | `agentcache/` (**Server-side tool manifest resolution `ResolveToolForRequest`**, strict JSON Schema contract validation for declared skills, `X-Cicada-Memory-Action: flush` on mutation) |
 | **`ASI05`** | **Unexpected Code Execution** | `cmd/eakfd/` + `plugin/` (Ephemeral Agent Kernel Firewall over UNIX Domain Socket, gVisor/Kata isolation, `.tfstate`/RFC1918/IMDS output scrubbing) |
-| **`ASI06`** | **Memory & Context Poisoning** | `llmproxy/` (Stateless session memory isolation, reasoning trace `<thinking>` extraction & audit, automatic context flush headers) |
+| **`ASI06`** | **Memory & Context Poisoning** | `llmproxy/` + `taint/` (Stateless session memory isolation, `role: "tool"` / RAG provenance taint propagation, reasoning trace `<thinking>` audit, automatic context flush headers) |
 | **`ASI07`** | **Insecure Inter-Agent Communication** | `chain/` (Ed25519-signed `X-Cicada-Agent-Chain` hop verification, delegation depth cap, allowed-upstream lineage enforcement) |
 | **`ASI08`** | **Cascading Hallucination / Failures** | `cascade/` (Cross-agent response trace-ID propagation detector, MCP session hash verification) |
-| **`ASI09`** | **Human-Agent Trust Exploitation** | `ciba/` + `hitl/` (Mandatory out-of-band CIBA authorization with ECIES X25519 encrypted payloads & hardware biometric signing on Aegis mobile) |
+| **`ASI09`** | **Human-Agent Trust Exploitation** | `ciba/` + `hitl/` (Mandatory out-of-band CIBA authorization inspecting **untruncated payloads** with constant-time **`SHA-256(Method\|URL\|Body)` `PayloadHash` cryptographic binding**, ECIES X25519 encryption & hardware biometric signing on Aegis mobile) |
 | **`ASI10`** | **Rogue Agents & Data Exfiltration** | `canary/` (Raw/Base64/Hex/URL/SHA-256 `CICADA_CANARY_*` trap), `output/` (22 secret prefixes + Shannon entropy `H(X)≥4.3` + multi-encoding Vault DLP), `gossip/` (Lock-free P2P kill-switch), `ssrf/` (`DialContext` IP pinning) |
 
 ---
@@ -250,13 +258,33 @@ Read `/docs/Platform_Documentation.md` and inspect `Sentry_Gateway/cmd/sentry/ma
 
 ---
 
-## 📜 License & Legal Attribution
+## 📜 License, Mandatory Attribution & Legal Notice
 
-This project is licensed under the **Apache License 2.0**. See the [LICENSE](./LICENSE) and [NOTICE](./NOTICE) files for details.
+This project is licensed under the **Apache License, Version 2.0**. See the [LICENSE](./LICENSE) and [NOTICE](./NOTICE) files for full legal terms.
+
+### ⚠️ Mandatory Attribution Requirement for Clones, Forks & Derivative Works
+
+Under **Section 4(c)** and **Section 4(d)** of the [Apache License 2.0](./LICENSE), your permission to use, clone, fork, modify, redistribute, or embed this software (or any portion of its architecture, source code, schemas, or enforcement pipeline) is **expressly conditioned upon retaining attribution to the original author**:
+
+1. **Preservation of Copyright & `NOTICE` File (Apache 2.0 § 4(c)–(d)):** Any clone, fork, redistribution, container image, binary distribution, or Derivative Work **must** include an unmodified copy of the [LICENSE](./LICENSE) and [NOTICE](./NOTICE) files and retain all copyright and authorship headers in the source files.
+2. **Visible Credit in Documentation & Interfaces:** If you use, adapt, or deploy this software—or build a commercial or open-source product derived from its architecture—you **must** include the following visible credit in your repository `README`, documentation, or product "About" / legal notices:
+   > *"Built upon the Cicada Zero-Trust Agent Gateway and the Matthews Enforcement Framework (MEF), originally conceived, architected, and developed by **Patrick Matthews** (Affinity Ops Ltd.)."*
+3. **Academic, Technical & Benchmark Citation:** If you reference Cicada, the Matthews Enforcement Framework (MEF), or its enforcement architecture in academic papers, whitepapers, security benchmarks, or talks, please cite:
+   ```bibtex
+   @techreport{matthews2026mef,
+     author      = {Matthews, Patrick},
+     title       = {The Matthews Enforcement Framework (MEF): A Deterministic Mathematical Model for Zero-Trust Autonomous Agent Governance},
+     institution = {Affinity Ops Ltd.},
+     year        = {2026},
+     doi         = {10.5281/zenodo.19597120},
+     url         = {https://doi.org/10.5281/zenodo.19597120},
+     note        = {SSRN ID: 6612798}
+   }
+   ```
 
 ```text
-Cicada Zero-Trust Agent Gateway Architecture
-Copyright 2026 Affinity Ops Ltd. / Patrick Matthews
+Cicada Zero-Trust Agent Gateway Architecture & Matthews Enforcement Framework (MEF)
+Copyright 2026 Patrick Matthews & Affinity Ops Ltd. All rights reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -267,6 +295,6 @@ You may obtain a copy of the License at
 Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
+See the License and NOTICE file for the specific language governing
+permissions, mandatory attribution notices, and limitations under the License.
 ```

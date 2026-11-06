@@ -1,0 +1,23 @@
+cff-version: 1.2.0
+message: "If you use, fork, benchmark, or build upon Cicada or the Matthews Enforcement Framework (MEF), please credit and cite the original creator as below."
+title: "Cicada: Zero-Trust Runtime Enforcement Gateway & Matthews Enforcement Framework (MEF)"
+authors:
+  - family-names: "Matthews"
+    given-names: "Patrick"
+    affiliation: "Affinity Ops Ltd."
+version: "1.0.0"
+date-released: "2026-10-15"
+license: "Apache-2.0"
+repository-code: "https://github.com/affinity-ops/OS-Cicada"
+doi: "10.5281/zenodo.19597120"
+preferred-citation:
+  type: report
+  authors:
+    - family-names: "Matthews"
+      given-names: "Patrick"
+      affiliation: "Affinity Ops Ltd."
+  title: "The Matthews Enforcement Framework (MEF): A Deterministic Mathematical Model for Zero-Trust Autonomous Agent Governance"
+  institution: "Affinity Ops Ltd."
+  year: 2026
+  doi: "10.5281/zenodo.19597120"
+  url: "https://papers.ssrn.com/sol3/papers.cfm?abstract_id=6612798"
