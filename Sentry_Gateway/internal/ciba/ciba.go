@@ -20,6 +20,9 @@ package ciba
 
 import (
 	"context"
+	"crypto/sha256"
+	"crypto/subtle"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -47,6 +50,7 @@ type Request struct {
 	ActionSummary  string  `json:"action_summary"`
 	TargetURL      string  `json:"target_url,omitempty"`
 	PayloadPreview string  `json:"payload_preview,omitempty"`
+	PayloadHash    string  `json:"payload_hash,omitempty"`
 	RiskScore      float64 `json:"risk_score"`
 	RiskReason     string  `json:"risk_reason,omitempty"`
 	TimeoutSeconds int     `json:"timeout_seconds"`
@@ -58,6 +62,7 @@ type PollResponse struct {
 	Status      string `json:"status"` // pending | approved | denied | expired
 	Approved    bool   `json:"approved"`
 	RespondedBy string `json:"responded_by,omitempty"`
+	PayloadHash string `json:"payload_hash,omitempty"`
 }
 
 // Result carries the outcome back to the Gateway's request handler.
@@ -65,7 +70,31 @@ type Result struct {
 	Approved    bool
 	Status      string // approved | denied | expired | error
 	RespondedBy string
+	PayloadHash string
 	Err         error
+}
+
+// ComputePayloadHash computes a deterministic SHA-256 commitment over the HTTP
+// method, target URL, and full request body bytes so CIBA human approvals are
+// cryptographically bound to the exact payload that will be executed.
+func ComputePayloadHash(method, targetURL string, body []byte) string {
+	h := sha256.New()
+	h.Write([]byte(strings.ToUpper(strings.TrimSpace(method))))
+	h.Write([]byte("|"))
+	h.Write([]byte(strings.TrimSpace(targetURL)))
+	h.Write([]byte("|"))
+	h.Write(body)
+	return hex.EncodeToString(h.Sum(nil))
+}
+
+// VerifyPayloadHash checks in constant time that the request about to be
+// forwarded matches the SHA-256 payload hash bound at CIBA creation time.
+func VerifyPayloadHash(boundHash, method, targetURL string, body []byte) bool {
+	if boundHash == "" {
+		return false
+	}
+	actual := ComputePayloadHash(method, targetURL, body)
+	return subtle.ConstantTimeCompare([]byte(boundHash), []byte(actual)) == 1
 }
 
 // Authorize initiates a CIBA flow and blocks until the owner responds or the
@@ -139,8 +168,14 @@ func Authorize(ctx context.Context, req Request) Result {
 
 		switch pr.Status {
 		case "approved":
-			log.Printf("[CIBA] APPROVED by %s for agent=%s trace=%s", pr.RespondedBy, req.AgentID, req.TraceID)
-			return Result{Approved: true, Status: "approved", RespondedBy: pr.RespondedBy}
+			boundHash := req.PayloadHash
+			if pr.PayloadHash != "" && req.PayloadHash != "" && pr.PayloadHash != req.PayloadHash {
+				log.Printf("[CIBA] PAYLOAD HASH MISMATCH for agent=%s trace=%s (expected %s, got %s) — denying",
+					req.AgentID, req.TraceID, req.PayloadHash, pr.PayloadHash)
+				return Result{Approved: false, Status: "denied", Err: fmt.Errorf("CIBA payload hash mismatch")}
+			}
+			log.Printf("[CIBA] APPROVED by %s for agent=%s trace=%s payload_hash=%s", pr.RespondedBy, req.AgentID, req.TraceID, boundHash)
+			return Result{Approved: true, Status: "approved", RespondedBy: pr.RespondedBy, PayloadHash: boundHash}
 		case "denied":
 			log.Printf("[CIBA] DENIED by %s for agent=%s trace=%s", pr.RespondedBy, req.AgentID, req.TraceID)
 			return Result{Approved: false, Status: "denied", RespondedBy: pr.RespondedBy}

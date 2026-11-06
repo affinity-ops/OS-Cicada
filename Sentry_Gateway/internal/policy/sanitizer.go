@@ -291,7 +291,182 @@ func SanitizePolicy(registration map[string]interface{}) SanitizeResult {
 		}
 	}
 
+	// ── Rule 6: Meta's "Agents Rule of Two" (Lethal Trifecta Guard) ──
+	// An autonomous agent must satisfy no more than two of the following three
+	// properties within a single session unless gated by mandatory human approval:
+	//   (A) Processes untrusted inputs (web scraping, RAG, webhooks, email, external docs)
+	//   (B) Has access to sensitive systems or private data (PII, financial APIs, internal DBs, secrets)
+	//   (C) Can change state or communicate externally (POST/PUT/PATCH/DELETE, write/transact/send scopes)
+	//
+	// If a registration manifest combines all three legs (A + B + C) and HITL is
+	// disabled, it creates a direct prompt-injection-to-exfiltration/mutation bridge
+	// and is automatically rejected.
+	hasUntrustedInput, untrustedSource := detectUntrustedInputLeg(registration)
+	hasSensitiveAccess, sensitiveSource := detectSensitiveAccessLeg(registration)
+	hasStateMutation, mutationSource := detectStateMutationLeg(registration, destructiveCapability)
+
+	if hasUntrustedInput && hasSensitiveAccess && hasStateMutation && !hitlEnabled {
+		result.addViolation(PolicyViolation{
+			Field:    "enforcement.rule_of_two",
+			Severity: "critical",
+			Code:     "RULE_OF_TWO_TRIFECTA",
+			Message: fmt.Sprintf(
+				"Agents Rule of Two violation (Lethal Trifecta): agent combines (A) untrusted input [%s], "+
+					"(B) sensitive data/system access [%s], and (C) state mutation or external communication [%s] "+
+					"without HITL enabled. Split the agent into separate facets or enable mandatory HITL/CIBA.",
+				untrustedSource, sensitiveSource, mutationSource),
+		})
+	}
+
 	return result
+}
+
+var untrustedInputIndicators = []string{
+	"untrusted", "retrieved", "webhook", "scrape", "scraper",
+	"inbox", "email_ingest", "public_web", "rag", "external_doc", "browser",
+}
+
+var sensitiveAccessIndicators = []string{
+	"internal", "stripe", "payment", "billing", "database", "vault",
+	"secret", "pii", "customer", "crm", "finance", "ledger", "payroll", "treasury",
+}
+
+var mutationScopeIndicators = []string{
+	"write", "delete", "transact", "send", "transfer", "mutate", "execute",
+}
+
+func detectUntrustedInputLeg(registration map[string]interface{}) (bool, string) {
+	if v, ok := registration["untrusted_input"].(bool); ok && v {
+		return true, "registration.untrusted_input=true"
+	}
+	if prov, ok := registration["provenance"].(string); ok {
+		p := strings.ToLower(strings.TrimSpace(prov))
+		if p == "retrieved" || p == "untrusted" || p == "external" || p == "rag" || p == "webhook" {
+			return true, "registration.provenance=" + p
+		}
+	}
+	if tools, ok := registration["tools"].([]interface{}); ok {
+		for _, t := range tools {
+			tool, ok := t.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			toolName, _ := tool["name"].(string)
+			if v, ok := tool["untrusted_input"].(bool); ok && v {
+				return true, fmt.Sprintf("tool '%s' (untrusted_input=true)", toolName)
+			}
+			if prov, ok := tool["provenance"].(string); ok {
+				p := strings.ToLower(strings.TrimSpace(prov))
+				if p == "retrieved" || p == "untrusted" || p == "external" || p == "rag" {
+					return true, fmt.Sprintf("tool '%s' (provenance=%s)", toolName, p)
+				}
+			}
+			combined := strings.ToLower(toolName + " " + stringField(tool, "description"))
+			for _, s := range sliceStrings(tool["scopes"]) {
+				combined += " " + strings.ToLower(s)
+			}
+			for _, u := range sliceStrings(tool["url_patterns"]) {
+				combined += " " + strings.ToLower(u)
+			}
+			for _, kw := range untrustedInputIndicators {
+				if strings.Contains(combined, kw) {
+					return true, fmt.Sprintf("tool '%s' (%s)", toolName, kw)
+				}
+			}
+		}
+	}
+	return false, ""
+}
+
+func detectSensitiveAccessLeg(registration map[string]interface{}) (bool, string) {
+	if v, ok := registration["sensitive_access"].(bool); ok && v {
+		return true, "registration.sensitive_access=true"
+	}
+	if identity, ok := registration["identity"].(map[string]interface{}); ok {
+		crit := strings.ToLower(stringField(identity, "criticality"))
+		if crit == "critical" || crit == "high" {
+			return true, "identity.criticality=" + crit
+		}
+	}
+	if tools, ok := registration["tools"].([]interface{}); ok {
+		for _, t := range tools {
+			tool, ok := t.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			toolName, _ := tool["name"].(string)
+			if v, ok := tool["sensitive_access"].(bool); ok && v {
+				return true, fmt.Sprintf("tool '%s' (sensitive_access=true)", toolName)
+			}
+			combined := strings.ToLower(toolName + " " + stringField(tool, "description"))
+			for _, s := range sliceStrings(tool["scopes"]) {
+				combined += " " + strings.ToLower(s)
+			}
+			for _, u := range sliceStrings(tool["url_patterns"]) {
+				combined += " " + strings.ToLower(u)
+			}
+			for _, kw := range sensitiveAccessIndicators {
+				if strings.Contains(combined, kw) {
+					return true, fmt.Sprintf("tool '%s' (%s)", toolName, kw)
+				}
+			}
+		}
+	}
+	return false, ""
+}
+
+func detectStateMutationLeg(registration map[string]interface{}, destructiveCapability bool) (bool, string) {
+	if destructiveCapability {
+		return true, "registration.destructive_capability=true"
+	}
+	if v, ok := registration["external_communication"].(bool); ok && v {
+		return true, "registration.external_communication=true"
+	}
+	if tools, ok := registration["tools"].([]interface{}); ok {
+		for _, t := range tools {
+			tool, ok := t.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			toolName, _ := tool["name"].(string)
+			if d, ok := tool["destructive"].(bool); ok && d {
+				return true, fmt.Sprintf("tool '%s' (destructive=true)", toolName)
+			}
+			if hasDestructiveMethods(tool) {
+				return true, fmt.Sprintf("tool '%s' (state-mutating HTTP method)", toolName)
+			}
+			for _, s := range sliceStrings(tool["scopes"]) {
+				lowerScope := strings.ToLower(s)
+				for _, kw := range mutationScopeIndicators {
+					if strings.Contains(lowerScope, kw) {
+						return true, fmt.Sprintf("tool '%s' (scope=%s)", toolName, s)
+					}
+				}
+			}
+		}
+	}
+	return false, ""
+}
+
+func stringField(m map[string]interface{}, key string) string {
+	if v, ok := m[key].(string); ok {
+		return v
+	}
+	return ""
+}
+
+func sliceStrings(raw interface{}) []string {
+	items, ok := raw.([]interface{})
+	if !ok {
+		return nil
+	}
+	out := make([]string, 0, len(items))
+	for _, item := range items {
+		if s, ok := item.(string); ok {
+			out = append(out, s)
+		}
+	}
+	return out
 }
 
 // hasDestructiveMethods checks if a tool declaration includes HTTP methods

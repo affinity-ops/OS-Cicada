@@ -62,10 +62,18 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 	"unicode"
 
 	"github.com/asai/cicada/sentry/internal/queue"
+)
+
+// localHistory provides an in-memory fallback when Redis is unavailable so
+// drift baseline protection remains active in unit/simulation environments.
+var (
+	localHistoryMu sync.RWMutex
+	localHistory   = make(map[string][]map[string]float64)
 )
 
 // ── Result ────────────────────────────────────────────────────────────────────
@@ -183,7 +191,13 @@ func Check(ctx context.Context, agentID, targetURL, httpMethod, actionSummary st
 	driftDetected := avgSim < threshold
 
 	// ── Store current fingerprint for future comparisons ──────────────────
-	storeFingerprint(ctx, historyKey, currentVector)
+	// SECURITY INVARIANT: Do NOT update the behavioural baseline when drift is
+	// detected. Storing unapproved drift vectors allows an adaptive attacker
+	// to gradually shift ("boil the frog") the agent's baseline until
+	// destructive actions appear normal.
+	if !driftDetected {
+		storeFingerprint(ctx, historyKey, currentVector)
+	}
 
 	// ── Build human-readable reason ──────────────────────────────────────
 	reason := fmt.Sprintf(
@@ -326,6 +340,23 @@ func agentHistoryKey(agentID string) string {
 // This is acceptable overhead — fingerprints are small (typically <50 tokens)
 // and drift checks are not on the hot path of every request.
 func storeFingerprint(ctx context.Context, key string, vector map[string]float64) {
+	maxHistory := historySize()
+
+	// Copy vector for safe in-memory retention
+	vecCopy := make(map[string]float64, len(vector))
+	for k, v := range vector {
+		vecCopy[k] = v
+	}
+
+	localHistoryMu.Lock()
+	existing := localHistory[key]
+	updated := append([]map[string]float64{vecCopy}, existing...)
+	if len(updated) > maxHistory {
+		updated = updated[:maxHistory]
+	}
+	localHistory[key] = updated
+	localHistoryMu.Unlock()
+
 	if queue.Client == nil {
 		return
 	}
@@ -336,8 +367,6 @@ func storeFingerprint(ctx context.Context, key string, vector map[string]float64
 		return
 	}
 
-	maxHistory := historySize()
-
 	// LPUSH: add to head of list (newest first)
 	queue.Client.LPush(ctx, key, string(data))
 	// LTRIM: keep only the last N entries
@@ -346,11 +375,19 @@ func storeFingerprint(ctx context.Context, key string, vector map[string]float64
 	queue.Client.Expire(ctx, key, HistoryTTL)
 }
 
-// getHistory retrieves the agent's last N action fingerprints from Redis.
-// Returns an empty slice if Redis is unavailable or the agent has no history.
+// getHistory retrieves the agent's last N action fingerprints from Redis
+// (or the in-memory fallback when Redis is unavailable).
 func getHistory(ctx context.Context, key string) ([]map[string]float64, error) {
 	if queue.Client == nil {
-		return nil, fmt.Errorf("redis unavailable")
+		localHistoryMu.RLock()
+		defer localHistoryMu.RUnlock()
+		entries := localHistory[key]
+		if len(entries) == 0 {
+			return nil, fmt.Errorf("no history")
+		}
+		out := make([]map[string]float64, len(entries))
+		copy(out, entries)
+		return out, nil
 	}
 
 	// LRANGE 0 -1: get all entries in the list

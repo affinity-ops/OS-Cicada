@@ -356,6 +356,89 @@ func TestSanitize_NarrowNonDestructive_Allowed(t *testing.T) {
 	}
 }
 
+// ── Rule 6: Meta's Agents Rule of Two (Lethal Trifecta) ─────────
+
+func TestSanitize_RuleOfTwo_TrifectaWithoutHITL_Rejected(t *testing.T) {
+	reg := map[string]interface{}{
+		"tools": []interface{}{
+			map[string]interface{}{
+				"name":         "public-webhook-reader",
+				"url_patterns": []interface{}{"https://hooks.external.org/v1/inbox/*"},
+				"methods":      []interface{}{"GET"},
+				"destructive":  false,
+				"provenance":   "retrieved",
+			},
+			map[string]interface{}{
+				"name":         "stripe-refund-writer",
+				"url_patterns": []interface{}{"https://api.stripe.com/v1/refunds"},
+				"methods":      []interface{}{"POST"},
+				"destructive":  false,
+				"scopes":       []interface{}{"write:refunds"},
+			},
+		},
+		"destructive_capability": false,
+		"hitl_enabled":           false,
+	}
+
+	result := SanitizePolicy(reg)
+	if result.Allowed {
+		t.Error("agent combining untrusted input + sensitive access + state mutation without HITL must be rejected")
+	}
+	assertViolationCode(t, result, "RULE_OF_TWO_TRIFECTA")
+}
+
+func TestSanitize_RuleOfTwo_TrifectaWithHITL_Allowed(t *testing.T) {
+	reg := map[string]interface{}{
+		"tools": []interface{}{
+			map[string]interface{}{
+				"name":         "public-webhook-reader",
+				"url_patterns": []interface{}{"https://hooks.external.org/v1/inbox/*"},
+				"methods":      []interface{}{"GET"},
+				"provenance":   "retrieved",
+			},
+			map[string]interface{}{
+				"name":         "stripe-refund-writer",
+				"url_patterns": []interface{}{"https://api.stripe.com/v1/refunds"},
+				"methods":      []interface{}{"POST"},
+				"scopes":       []interface{}{"write:refunds"},
+			},
+		},
+		"hitl_enabled": true,
+	}
+
+	result := SanitizePolicy(reg)
+	if !result.Allowed {
+		t.Errorf("trifecta agent with HITL enabled should be allowed, got violations: %+v", result.Violations)
+	}
+}
+
+func TestSanitize_RuleOfTwo_TwoOfThreeWithoutHITL_Allowed(t *testing.T) {
+	// Combines (A) untrusted input + (B) sensitive read access, but NO (C) state mutation/external write
+	reg := map[string]interface{}{
+		"tools": []interface{}{
+			map[string]interface{}{
+				"name":         "rag-doc-reader",
+				"url_patterns": []interface{}{"https://docs.external.org/v1/rag/*"},
+				"methods":      []interface{}{"GET"},
+				"provenance":   "retrieved",
+			},
+			map[string]interface{}{
+				"name":         "crm-customer-reader",
+				"url_patterns": []interface{}{"https://crm.internal.com/v1/customers/*"},
+				"methods":      []interface{}{"GET"},
+				"scopes":       []interface{}{"read:customers"},
+			},
+		},
+		"destructive_capability": false,
+		"hitl_enabled":           false,
+	}
+
+	result := SanitizePolicy(reg)
+	if !result.Allowed {
+		t.Errorf("2-of-3 agent (untrusted input + sensitive read, no mutation) should be allowed, got: %+v", result.Violations)
+	}
+}
+
 // ── Helpers ──────────────────────────────────────────────────────
 
 func assertViolationCode(t *testing.T, result SanitizeResult, code string) {

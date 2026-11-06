@@ -50,10 +50,41 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
+	"github.com/asai/cicada/sentry/internal/queue"
 	"github.com/asai/cicada/sentry/internal/store"
 )
+
+// completedStore holds in-memory timestamps of completed prerequisite tools
+// (`agentID + "|" + toolID` -> time.Time) so fast multi-step agent calls are
+// never broken by the 100ms async PostgreSQL mirror batch delay in EdgeLedger,
+// and unit/simulation environments work without external DB lag.
+var completedStore sync.Map
+
+func prereqRedisKey(agentID, toolID string) string {
+	return fmt.Sprintf("cicada:prereq:done:%s:%s", agentID, toolID)
+}
+
+func prereqMemKey(agentID, toolID string) string {
+	return agentID + "|" + toolID
+}
+
+// RecordCompletedTool records that an agent has successfully executed a tool
+// (called ONLY after the upstream HTTP call returns a 2xx/3xx status code).
+func RecordCompletedTool(ctx context.Context, agentID, toolID string) {
+	if agentID == "" || toolID == "" {
+		return
+	}
+	now := time.Now().UTC()
+	completedStore.Store(prereqMemKey(agentID, toolID), now)
+
+	if queue.Client != nil {
+		ttl := time.Duration(getWindowMinutes()) * time.Minute
+		_ = queue.Client.Set(ctx, prereqRedisKey(agentID, toolID), now.Format(time.RFC3339Nano), ttl).Err()
+	}
+}
 
 // DefaultWindowMinutes is how recently the prerequisite tool must have been
 // executed. 10 minutes is generous enough for a multi-step workflow but tight
@@ -139,12 +170,33 @@ func LookupToolPrerequisite(ctx context.Context, agentID, toolID string) (*ToolP
 //
 // Returns true if at least one matching ledger entry exists.
 func HasCompletedPrerequisite(ctx context.Context, agentID, prerequisiteToolID string) (bool, error) {
+	windowMinutes := getWindowMinutes()
+	cutoff := time.Now().UTC().Add(-time.Duration(windowMinutes) * time.Minute)
+
+	// ── Fast path 1: In-memory post-execution completion cache (0ms lag) ──
+	if v, ok := completedStore.Load(prereqMemKey(agentID, prerequisiteToolID)); ok {
+		if ts, ok := v.(time.Time); ok && !ts.Before(cutoff) {
+			return true, nil
+		}
+		completedStore.Delete(prereqMemKey(agentID, prerequisiteToolID))
+	}
+
+	// ── Fast path 2: Redis completion key (eliminates 100ms pgMirrorWorker race) ──
+	if queue.Client != nil {
+		val, err := queue.Client.Get(ctx, prereqRedisKey(agentID, prerequisiteToolID)).Result()
+		if err == nil && val != "" {
+			if ts, parseErr := time.Parse(time.RFC3339Nano, val); parseErr == nil && !ts.Before(cutoff) {
+				completedStore.Store(prereqMemKey(agentID, prerequisiteToolID), ts)
+				return true, nil
+			}
+			return true, nil
+		}
+	}
+
+	// ── Fallback path 3: PostgreSQL action_ledger ────────────────────────
 	if store.DB == nil {
 		return false, fmt.Errorf("database unavailable")
 	}
-
-	windowMinutes := getWindowMinutes()
-	cutoff := time.Now().Add(-time.Duration(windowMinutes) * time.Minute)
 
 	var count int
 	err := store.DB.QueryRow(ctx,
@@ -198,8 +250,17 @@ func Check(ctx context.Context, agentID, toolID string) Result {
 	// ── Lookup tool's prerequisite ────────────────────────────────────────
 	tp, err := LookupToolPrerequisite(ctx, agentID, toolID)
 	if err != nil {
-		// Tool not found in manifest or DB unavailable — fail open.
-		log.Printf("[PREREQUISITE] Lookup failed for agent=%s tool=%s: %v (failing open)", agentID, toolID, err)
+		failClosed := os.Getenv("CICADA_FAIL_CLOSED") != "false"
+		if failClosed {
+			log.Printf("[PREREQUISITE] Lookup failed for agent=%s tool=%s: %v (FAILING CLOSED)", agentID, toolID, err)
+			return Result{
+				Passed:        false,
+				ToolID:        toolID,
+				Reason:        fmt.Sprintf("prerequisite lookup failed: %v — failing closed", err),
+				WindowMinutes: getWindowMinutes(),
+			}
+		}
+		log.Printf("[PREREQUISITE] Lookup failed for agent=%s tool=%s: %v (failing open — dev mode)", agentID, toolID, err)
 		return Result{
 			Passed:        true,
 			ToolID:        toolID,
@@ -221,8 +282,19 @@ func Check(ctx context.Context, agentID, toolID string) Result {
 	// ── Check if prerequisite was completed ───────────────────────────────
 	completed, err := HasCompletedPrerequisite(ctx, agentID, tp.RequiresPreviousTool)
 	if err != nil {
-		// DB error — fail open (other layers provide protection)
-		log.Printf("[PREREQUISITE] Ledger query failed for agent=%s prerequisite=%s: %v (failing open)",
+		failClosed := os.Getenv("CICADA_FAIL_CLOSED") != "false"
+		if failClosed {
+			log.Printf("[PREREQUISITE] Completion query failed for agent=%s prerequisite=%s: %v (FAILING CLOSED)",
+				agentID, tp.RequiresPreviousTool, err)
+			return Result{
+				Passed:         false,
+				ToolID:         toolID,
+				RequiredToolID: tp.RequiresPreviousTool,
+				Reason:         fmt.Sprintf("prerequisite verification failed: %v — failing closed", err),
+				WindowMinutes:  getWindowMinutes(),
+			}
+		}
+		log.Printf("[PREREQUISITE] Ledger query failed for agent=%s prerequisite=%s: %v (failing open — dev mode)",
 			agentID, tp.RequiresPreviousTool, err)
 		return Result{
 			Passed:         true,

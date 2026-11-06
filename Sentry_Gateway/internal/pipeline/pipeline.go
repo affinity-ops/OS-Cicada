@@ -34,12 +34,15 @@ import (
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
 
+	"github.com/asai/cicada/sentry/internal/blastradius"
 	"github.com/asai/cicada/sentry/internal/drift"
 	"github.com/asai/cicada/sentry/internal/injection"
 	"github.com/asai/cicada/sentry/internal/prerequisite"
 	"github.com/asai/cicada/sentry/internal/semantic"
+	"github.com/asai/cicada/sentry/internal/taint"
 	"github.com/asai/cicada/sentry/internal/toolscope"
 	"github.com/asai/cicada/sentry/internal/tracing"
+	"github.com/asai/cicada/sentry/internal/txprofile"
 	"github.com/asai/cicada/sentry/internal/velocity"
 )
 
@@ -72,6 +75,14 @@ type Request struct {
 	// Populated from agent_tools.tool_scope (cached in session token in production).
 	// Empty string value = unrestricted. Missing key = unknown tool.
 	ToolScopeMap map[string]string
+
+	// EndpointCriticality is the criticality classification for the target
+	// resource/skill ("CRITICAL", "HIGH", "MEDIUM", "LOW"). Defaults to "MEDIUM".
+	EndpointCriticality string
+
+	// TxProfile is the agent's historical multivariate transaction profile
+	// (loaded from Redis in production; cold-start safe when empty).
+	TxProfile txprofile.AgentProfile
 }
 
 // LayerResult captures one layer's decision and reason.
@@ -84,13 +95,19 @@ type LayerResult struct {
 
 // PipelineResult captures the composite admission decision.
 type PipelineResult struct {
-	Admitted      bool          // true = request passes all layers
-	BlockedBy     string        // name of the first layer that blocked (empty if admitted)
-	BlockReason   string        // reason from the blocking layer
-	LayerResults  []LayerResult // ordered results from every layer
-	DriftDetected bool          // true = drift guard flagged a context shift (NOT a block — triggers CIBA)
-	DriftReason   string        // human-readable explanation for the CIBA notification
-	DriftScore    float64       // cosine similarity score (0.0 = total shift, 1.0 = identical)
+	Admitted        bool                          // true = request passes all blocking layers
+	BlockedBy       string                        // name of the first layer that blocked (empty if admitted)
+	BlockReason     string                        // reason from the blocking layer
+	LayerResults    []LayerResult                 // ordered results from every layer
+	DriftDetected   bool                          // true = drift guard flagged a context shift (triggers CIBA)
+	DriftReason     string                        // human-readable explanation for the CIBA notification
+	DriftScore      float64                       // cosine similarity score (0.0 = total shift, 1.0 = identical)
+	ForceCIBA       bool                          // true = any escalation layer (Drift, BlastRadius, TxProfile, CaMeL Taint) requires human sign-off
+	CIBAReasons     []string                      // aggregated reasons requiring CIBA sign-off
+	BlastEstimate   blastradius.Estimate          // Layer 7 blast-radius assessment
+	TxFeatures      txprofile.TransactionFeatures // Layer 8 extracted transaction features
+	TxProfileResult txprofile.ProfileResult       // Layer 8 multivariate & deontic rule assessment
+	TaintResult     taint.CapabilityResult        // Layer 9 CaMeL session taint assessment
 }
 
 // Evaluate runs the request through the local admission layers in order.
@@ -231,6 +248,8 @@ func Evaluate(ctx context.Context, req Request) PipelineResult {
 		result.DriftDetected = true
 		result.DriftReason = driftResult.Reason
 		result.DriftScore = driftResult.Similarity
+		result.ForceCIBA = true
+		result.CIBAReasons = append(result.CIBAReasons, driftResult.Reason)
 	}
 
 	// ── Layer 5: Prerequisite Check (Forward Saga Enforcement) ──────────
@@ -302,8 +321,104 @@ func Evaluate(ctx context.Context, req Request) PipelineResult {
 		}
 	}
 
+	// ── Layer 7: Blast-Radius Estimation (Pre-Execution Impact Analysis) ─
+	// Inspects destructive payloads (unbounded SQL WHERE 1=1 / DELETE without
+	// WHERE, destructive shell commands rm -rf, bulk API flags, large JSON
+	// arrays, CRITICAL endpoint tags) and forces CIBA human approval when the
+	// single-shot blast radius is high.
+	ctx7, span7 := tracer.Start(ctx, "pipeline.layer.blast_radius")
+	blastEst := blastradius.Analyze(req.EndpointCriticality, req.HTTPMethod, req.Body, req.TargetURL)
+	blastLayer := LayerResult{
+		Layer:   "blast_radius",
+		Blocked: false,
+		Score:   blastEst.Score,
+		Reason:  blastEst.Summary,
+	}
+	setLayerSpanAttributes(span7, blastLayer, req.AgentID)
+	span7.SetAttributes(
+		attribute.Bool("pipeline.blast_radius.force_ciba", blastEst.ForceCIBA),
+		attribute.Int("pipeline.blast_radius.estimated_records", blastEst.EstimatedRecords),
+	)
+	span7.End()
+	_ = ctx7
+
+	result.BlastEstimate = blastEst
+	result.LayerResults = append(result.LayerResults, blastLayer)
+	if blastEst.ForceCIBA {
+		result.ForceCIBA = true
+		result.CIBAReasons = append(result.CIBAReasons, blastEst.Summary)
+	}
+
+	// ── Layer 8: Multivariate Transaction Profiling & Deontic Never-Rules ─
+	// Defends against business-aligned semantic manipulation ("ultrathink"
+	// attacks) by extracting structured transaction features (RecipientID,
+	// Amount, Currency, ActionType) and evaluating deterministic Deontic
+	// Never-Rules + historical z-score/new-entity anomalies.
+	ctx8, span8 := tracer.Start(ctx, "pipeline.layer.tx_profile")
+	txFeatures := txprofile.ExtractFeatures(req.Body, req.TargetURL, req.HTTPMethod)
+	txRes := txprofile.Analyze(txFeatures, req.TxProfile)
+	txLayer := LayerResult{
+		Layer:   "tx_profile",
+		Blocked: false,
+		Score:   txRes.AnomalyScore,
+		Reason:  txRes.Summary,
+	}
+	setLayerSpanAttributes(span8, txLayer, req.AgentID)
+	span8.SetAttributes(
+		attribute.Bool("pipeline.tx_profile.force_ciba", txRes.ForceCIBA),
+		attribute.String("pipeline.tx_profile.deontic_violation", txRes.DeonticViolation),
+		attribute.Float64("pipeline.tx_profile.amount", txFeatures.Amount),
+		attribute.String("pipeline.tx_profile.recipient", txFeatures.RecipientID),
+	)
+	span8.End()
+	_ = ctx8
+
+	result.TxFeatures = txFeatures
+	result.TxProfileResult = txRes
+	result.LayerResults = append(result.LayerResults, txLayer)
+	if txRes.ForceCIBA {
+		result.ForceCIBA = true
+		result.CIBAReasons = append(result.CIBAReasons, txRes.Summary)
+	}
+
+	// ── Layer 9: CaMeL Session Taint & Capability Enforcement ─────────────
+	// Enforces information-flow capability restrictions: if the agent session
+	// previously ingested untrusted content (via /v1/llm/proxy tool_result,
+	// retrieved RAG context, or external GET), any state-mutating request
+	// (POST/PUT/PATCH/DELETE) is escalated to CIBA regardless of semantic score.
+	ctx9, span9 := tracer.Start(ctx, "pipeline.layer.camel_taint")
+	taintRes := taint.CheckCapability(ctx9, req.AgentID, req.HTTPMethod, req.TargetURL, req.Provenance)
+	var taintScore float64
+	if taintRes.ForceCIBA {
+		taintScore = 1.0
+	} else if taintRes.Tainted {
+		taintScore = 0.5
+	}
+	taintLayer := LayerResult{
+		Layer:   "camel_taint",
+		Blocked: false,
+		Score:   taintScore,
+		Reason:  taintRes.Reason,
+	}
+	setLayerSpanAttributes(span9, taintLayer, req.AgentID)
+	span9.SetAttributes(
+		attribute.Bool("pipeline.camel_taint.tainted", taintRes.Tainted),
+		attribute.Bool("pipeline.camel_taint.force_ciba", taintRes.ForceCIBA),
+	)
+	span9.End()
+
+	result.TaintResult = taintRes
+	result.LayerResults = append(result.LayerResults, taintLayer)
+	if taintRes.ForceCIBA {
+		result.ForceCIBA = true
+		result.CIBAReasons = append(result.CIBAReasons, taintRes.Reason)
+	}
+
 	// All layers passed.
-	pipelineSpan.SetAttributes(attribute.Bool("pipeline.admitted", true))
+	pipelineSpan.SetAttributes(
+		attribute.Bool("pipeline.admitted", true),
+		attribute.Bool("pipeline.force_ciba", result.ForceCIBA),
+	)
 	pipelineSpan.SetStatus(codes.Ok, "admitted")
 	return result
 }

@@ -230,6 +230,29 @@ func TestCheck_NoRedis_FirstAction(t *testing.T) {
 	}
 }
 
+// TestCheck_BoilTheFrogPoisoning_Blocked verifies that detected drift attempts
+// are NOT stored in the agent's baseline history. Previously, storeFingerprint
+// ran unconditionally even when driftDetected == true, allowing an attacker to
+// submit 5 unapproved destructive requests to overwrite the agent's history window.
+func TestCheck_BoilTheFrogPoisoning_Blocked(t *testing.T) {
+	ctx := context.Background()
+	agentID := "agent-boil-frog-001"
+
+	// 1. Establish legitimate read baseline
+	first := Check(ctx, agentID, "https://api.stripe.com/v1/charges", "GET", "Reading customer payment charges for monthly audit")
+	if first.DriftDetected {
+		t.Fatal("first baseline action should not trigger drift")
+	}
+
+	// 2. Attacker repeatedly attempts a completely different destructive action 6 times
+	for i := 0; i < 6; i++ {
+		attack := Check(ctx, agentID, "https://api.internal.com/v1/users/purge", "DELETE", "Purging all production database tables immediately")
+		if !attack.DriftDetected {
+			t.Fatalf("iteration %d: destructive shift should continue to trigger drift (baseline must not be poisoned), got sim=%.3f", i, attack.Similarity)
+		}
+	}
+}
+
 // ── Configuration ─────────────────────────────────────────────────────────────
 
 // TestIsEnabled_Default verifies drift is enabled by default.

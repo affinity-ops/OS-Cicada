@@ -39,7 +39,6 @@ import (
 	"github.com/asai/cicada/sentry/internal/cascade"
 	"github.com/asai/cicada/sentry/internal/chain"
 	"github.com/asai/cicada/sentry/internal/ciba"
-	"github.com/asai/cicada/sentry/internal/drift"
 	"github.com/asai/cicada/sentry/internal/fcm"
 	"github.com/asai/cicada/sentry/internal/federation"
 	"github.com/asai/cicada/sentry/internal/fga"
@@ -59,19 +58,21 @@ import (
 	"github.com/asai/cicada/sentry/internal/plugin"
 	"github.com/asai/cicada/sentry/internal/policy"
 	"github.com/asai/cicada/sentry/internal/policystore"
+	"github.com/asai/cicada/sentry/internal/prerequisite"
 	"github.com/asai/cicada/sentry/internal/queue"
 	"github.com/asai/cicada/sentry/internal/rolemapping"
 	"github.com/asai/cicada/sentry/internal/roles"
 	"github.com/asai/cicada/sentry/internal/rotation"
 	"github.com/asai/cicada/sentry/internal/scim"
 	"github.com/asai/cicada/sentry/internal/secrets"
-	"github.com/asai/cicada/sentry/internal/semantic"
 	"github.com/asai/cicada/sentry/internal/session"
 	"github.com/asai/cicada/sentry/internal/ssrf"
 	"github.com/asai/cicada/sentry/internal/shadow"
 	"github.com/asai/cicada/sentry/internal/slogger"
 	"github.com/asai/cicada/sentry/internal/store"
+	"github.com/asai/cicada/sentry/internal/taint"
 	"github.com/asai/cicada/sentry/internal/tracing"
+	"github.com/asai/cicada/sentry/internal/txprofile"
 	"github.com/asai/cicada/sentry/internal/velocity"
 )
 
@@ -1953,6 +1954,21 @@ func handleAgentRequest(w http.ResponseWriter, r *http.Request) {
 	// This check is O(1) — it reads from the singleflight-protected Redis
 	// skills cache with zero database overhead.
 	targetSkill := r.Header.Get("X-Cicada-Target-Skill")
+	if skillsMap, skillsErr := agentcache.GetSkills(r.Context(), agentID); skillsErr == nil && len(skillsMap) > 0 && targetSkill == "" {
+		// Server-side skill resolution: do not rely solely on client-supplied X-Cicada-Target-Skill.
+		urlLower := strings.ToLower(targetURL)
+		for sName := range skillsMap {
+			if strings.Contains(urlLower, strings.ToLower(sName)) {
+				targetSkill = sName
+				break
+			}
+		}
+		if targetSkill == "" && len(skillsMap) == 1 {
+			for sName := range skillsMap {
+				targetSkill = sName
+			}
+		}
+	}
 	if targetSkill != "" {
 		skillsMap, skillsErr := agentcache.GetSkills(r.Context(), agentID)
 		if skillsErr != nil {
@@ -2232,354 +2248,367 @@ func handleAgentRequest(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// ── 4c. Drift Guard (Context Shift Detection) ─────────────────────────────
+	// ── 4c / 6 / 7 / 8. Unified 9-Layer Admission Pipeline ────────────────────
+	// Runs all 9 admission layers through the single canonical pipeline.Evaluate
+	// path so main.go and pipeline.go can never drift apart:
+	//   Layer 1: injection_scan   (outbound prompt injection & DOM hidden text)
+	//   Layer 2: semantic_intent  (agent purpose vs. target URL & HTTP method)
+	//   Layer 3: velocity         (impact-weighted rate & bulk payload breaker)
+	//   Layer 4: drift_guard      (context shift detection — baseline protected)
+	//   Layer 5: prerequisite     (Forward Saga — server-side tool chain check)
+	//   Layer 6: tool_scope       (Atomic Tool Scoping — method-to-facet binding)
+	//   Layer 7: blast_radius     (unbounded SQL/shell/batch impact estimator)
+	//   Layer 8: tx_profile       (Deontic Never-Rules + z-score/new-recipient)
+	//   Layer 9: camel_taint      (CaMeL session taint capability restriction)
+	if r.Header.Get("X-Cicada-Memory-Action") == "flush" {
+		taint.ClearTaint(r.Context(), agentID)
+	}
+
+	var agentDesc, agentType string
+	if agentCacheErr == nil {
+		agentDesc = agentCached.Description
+		agentType = agentCached.AgentType
+	} else if store.DB != nil {
+		_ = store.DB.QueryRow(r.Context(),
+			`SELECT COALESCE(description,''), COALESCE(agent_type,'') FROM agents WHERE id = $1`,
+			agentID,
+		).Scan(&agentDesc, &agentType)
+	}
+
+	// Resolve tool identity, prerequisite chain, and atomic scope from the
+	// server-side agent_tools manifest rather than trusting client headers alone.
+	clientToolID := r.Header.Get("X-Cicada-Tool-ID")
+	agentTools, _ := agentcache.GetTools(r.Context(), agentID)
+	resolvedToolID, prereqMap, scopeMap := agentcache.ResolveToolForRequest(agentTools, clientToolID, targetURL, r.Method)
+	if prereqMap == nil && resolvedToolID != "" && store.DB != nil {
+		if tp, tpErr := prerequisite.LookupToolPrerequisite(r.Context(), agentID, resolvedToolID); tpErr == nil && tp != nil {
+			prereqMap = map[string]string{tp.ToolID: tp.RequiresPreviousTool}
+			scopeMap = map[string]string{tp.ToolID: tp.ToolScope}
+		} else if tpErr != nil && os.Getenv("CICADA_FAIL_CLOSED") != "false" {
+			prereqMap = map[string]string{resolvedToolID: "__lookup_failed__"}
+		}
+	}
+
+	ledgerCheckFn := func(reqTool string) bool {
+		if reqTool == "__lookup_failed__" {
+			return false
+		}
+		completed, lErr := prerequisite.HasCompletedPrerequisite(r.Context(), agentID, reqTool)
+		if lErr != nil {
+			return os.Getenv("CICADA_FAIL_CLOSED") == "false"
+		}
+		return completed
+	}
+
+	endpointCrit := "MEDIUM"
+	if r.Header.Get("X-Cicada-Skill-Criticality") == "high" {
+		endpointCrit = "HIGH"
+	}
+
 	actionSummary := r.Header.Get("X-Cicada-Action-Summary")
-	driftResult := drift.Check(r.Context(), agentID, targetURL, r.Method, actionSummary)
-	if driftResult.DriftDetected {
-		log.Printf("[DRIFT] Context Shift detected for agent %s: %s", agentID, driftResult.Reason)
-	}
+	provenanceHdr := r.Header.Get("X-Cicada-Content-Provenance")
+	agentTxProfile := loadAgentTxProfile(r.Context(), agentID)
 
-	// ── 5. CIBA last-hop authorization gate (mandatory) ──────────────────────
-	// CIBA replaces the old optional HITL webhook. It is ALWAYS active for
-	// write/transact scopes — developers cannot opt out. Tier 1 runs an instant
-	// policy pre-check. Only calls that exceed the risk threshold trigger the
-	// CIBA flow, which pushes a notification to the owner's device (dashboard
-	// during development, Flutter companion app in production). The owner
-	// approves or denies. Timeout = fail closed.
-	if session.ScopesContainWriteOrTransact(sessionScopes) {
-		payloadPreview := string(bodyBytes)
-		if len(payloadPreview) > 200 {
-			payloadPreview = payloadPreview[:200]
-		}
+	pipeRes := pipeline.Evaluate(r.Context(), pipeline.Request{
+		AgentID:             agentID,
+		TenantID:            tenantID,
+		AgentDescription:    agentDesc,
+		AgentType:           agentType,
+		TargetURL:           targetURL,
+		HTTPMethod:          r.Method,
+		Body:                string(bodyBytes),
+		Scopes:              sessionScopes,
+		Provenance:          provenanceHdr,
+		ActionSummary:       actionSummary,
+		ToolID:              resolvedToolID,
+		PrerequisiteMap:     prereqMap,
+		LedgerCheckFn:       ledgerCheckFn,
+		ToolScopeMap:        scopeMap,
+		EndpointCriticality: endpointCrit,
+		TxProfile:           agentTxProfile,
+	})
 
-		// Tier 1: instant policy pre-check
-		result := hitl.TieredCheck("", traceID, agentID, tenantID, targetURL, sessionScopes, payloadPreview)
-		if result.Err != nil {
-			log.Printf("[CIBA] Tier 1 error for agent %s: %v", agentID, result.Err)
-		}
-
-		// Layer 1d escalation: if a high-criticality skill contract is active,
-		// force the risk score above the CIBA threshold to guarantee mandatory
-		// human-in-the-loop review regardless of the Tier 1 pre-check result.
-		if r.Header.Get("X-Cicada-Skill-Criticality") == "high" {
-			if result.RiskScore < 0.8 {
-				result.RiskScore = 0.8
-			}
-			result.Approved = false
-			result.RiskReason = fmt.Sprintf("High-criticality skill contract: %s", targetSkill)
-			log.Printf("[CIBA] Skill criticality escalation: agent=%s skill=%s score=%.2f (trace %s)",
-				agentID, targetSkill, result.RiskScore, traceID)
-		}
-		// Pillar 1: Dynamic Intent Weighting — if Drift Guard detected a context shift,
-		// spike the risk score to force a CIBA escalation.
-		if driftResult.DriftDetected {
-			result.Approved = false
-			result.RiskScore = 0.95
-			result.RiskReason = "Context Shift (Drift): " + driftResult.Reason
-		}
-
-		if !result.Approved {
-			// Tier 1 flagged this as high-risk — initiate CIBA authorization
-			log.Printf("[CIBA] Tier 1 escalated to CIBA: agent=%s trace=%s score=%.2f reason=%q",
-				agentID, traceID, result.RiskScore, result.RiskReason)
-
-			// Read agent description from cache (already populated at L1587)
-			var agentDesc string
-			if agentCacheErr == nil {
-				agentDesc = agentCached.Description
-				if agentDesc == "" {
-					agentDesc = agentCached.Name
-				}
-			} else {
-				_ = store.DB.QueryRow(r.Context(),
-					`SELECT COALESCE(description, agent_name) FROM agents WHERE id = $1`, agentID,
-				).Scan(&agentDesc)
-			}
-
-			// Send FCM push to the paired Aegis device before blocking on CIBA.
-			// This wakes the operator's phone from sleep so they see the alert
-			// while the gateway is waiting for their decision.
-			// Non-fatal — if push fails the operator still gets the alert via heartbeat poll.
-			go func() {
-				var pushToken string
-				_ = store.DB.QueryRow(r.Context(),
-					`SELECT push_token FROM mobile_devices
-					 WHERE tenant_id = $1 AND status = 'active'
-					 AND push_token IS NOT NULL
-					 ORDER BY paired_at DESC LIMIT 1`,
-					tenantID,
-				).Scan(&pushToken)
-				if pushToken != "" {
-					if err := fcm.SendHitlAlert(context.Background(), pushToken, traceID); err != nil {
-						log.Printf("[FCM] Push failed for tenant=%s hold=%s: %v", tenantID, traceID, err)
-					}
-				}
-			}()
-
-			cibaResult := ciba.Authorize(r.Context(), ciba.Request{
-				TraceID:        traceID,
-				AgentID:        agentID,
-				TenantID:       tenantID,
-				ActionSummary:  fmt.Sprintf("Agent '%s' is attempting a %s operation", agentDesc, r.Method),
-				TargetURL:      targetURL,
-				PayloadPreview: payloadPreview,
-				RiskScore:      result.RiskScore,
-				RiskReason:     result.RiskReason,
-			})
-
-			if !cibaResult.Approved {
-				edgeLedger.AppendRecord(ledger.EventRecord{
-		HumanContext: humanContextJSON,
-					EventID: fmt.Sprintf("evt-%d", time.Now().UnixNano()), TraceID: traceID,
-					TenantID: tenantID, AgentID: agentID, ActionClass: "proxy",
-					Decision:    fmt.Sprintf("ciba_%s", cibaResult.Status),
-					ReasonCodes: []string{"ciba_denied", result.RiskReason},
-					RiskScore:   result.RiskScore,
-				})
-
-				// ── Saga compensating rollback on CIBA deny ─────────────────────
-				// If the agent has a registered saga_revert_route (operator-set at
-				// registration/certification time, NOT agent-supplied), enqueue a
-				// compensating transaction to reverse any partial side effects.
-				var sagaRevertRoute string
-				_ = store.DB.QueryRow(r.Context(),
-					`SELECT COALESCE(saga_revert_route, '') FROM agents WHERE id = $1`,
-					agentID,
-				).Scan(&sagaRevertRoute)
-
-				if sagaRevertRoute != "" {
-					// Enqueue the rollback intent. SSRF validation happens in the
-					// saga worker at execution time (not here at enqueue time) because:
-					//   1. The worker is the single enforcement point — defense in depth
-					//      is achieved by the worker re-validating even if this path
-					//      were to validate too.
-					//   2. DNS resolution results can change between enqueue and dequeue.
-					//   3. The enqueue path should record intent; the worker decides
-					//      whether to act on it.
-					rollbackID := fmt.Sprintf("rb-%d", time.Now().UnixNano())
-					h := sha256.Sum256([]byte(traceID + "ciba_denied" + time.Now().String()))
-					if queueErr := queue.PushRollback(r.Context(), queue.SagaJob{
-						RollbackID:         rollbackID,
-						TraceID:            traceID,
-						OriginalActionHash: hex.EncodeToString(h[:]),
-						RevertRoute:        sagaRevertRoute,
-						FailedAction:       "ciba_denied",
-						IdempotencyKey:     traceID + ":ciba_denied",
-					}); queueErr != nil {
-						log.Printf("[SAGA] Failed to enqueue rollback for trace %s: %v", traceID, queueErr)
-					} else {
-						log.Printf("[SAGA] Compensating rollback enqueued: rollback_id=%s trace=%s revert=%s",
-							rollbackID, traceID, sagaRevertRoute)
-						edgeLedger.AppendRecord(ledger.EventRecord{
-							HumanContext: humanContextJSON,
-							EventID:      fmt.Sprintf("evt-%d", time.Now().UnixNano()),
-							TraceID:      traceID,
-							TenantID:     tenantID, AgentID: agentID,
-							ActionClass: "saga_compensate",
-							Decision:    "rollback_enqueued",
-							ReasonCodes: []string{"saga_intent_published", "ciba_denied"},
-							RiskScore:   result.RiskScore,
-						})
-					}
-				}
-
-				w.Header().Set("Content-Type", "application/json")
-				w.WriteHeader(http.StatusForbidden)
-				w.Write([]byte(fmt.Sprintf(`{"error":"CIBA authorization %s","trace_id":"%s","risk_score":%.2f,"reason":"%s"}`,
-					cibaResult.Status, traceID, result.RiskScore, result.RiskReason)))
-				return
-			}
-
-			log.Printf("[CIBA] APPROVED by %s: agent=%s trace=%s", cibaResult.RespondedBy, agentID, traceID)
+	if !pipeRes.Admitted {
+		switch pipeRes.BlockedBy {
+		case "injection_scan":
+			log.Printf("[INJECTION] Outbound body blocked for agent %s trace %s (provenance=%s): %s",
+				agentID, traceID, provenanceHdr, pipeRes.BlockReason)
 			edgeLedger.AppendRecord(ledger.EventRecord{
-		HumanContext: humanContextJSON,
-				EventID: fmt.Sprintf("evt-%d", time.Now().UnixNano()), TraceID: traceID,
-				TenantID: tenantID, AgentID: agentID, ActionClass: "proxy",
-				Decision:    "ciba_approved",
-				ReasonCodes: []string{"ciba_approved", fmt.Sprintf("by:%s", cibaResult.RespondedBy)},
-				RiskScore:   result.RiskScore,
-			})
-		} else {
-			log.Printf("[CIBA] Tier 1 auto-approved: agent=%s trace=%s score=%.2f", agentID, traceID, result.RiskScore)
-		}
-	}
-
-	// ── 6. Prompt injection scan ──────────────────────────────────────────────
-	// Scans the outbound request body for injection patterns — an agent that
-	// has been successfully injected may attempt to propagate the attack by
-	// writing malicious instructions into downstream systems (databases, emails,
-	// documents). Catching this here closes the indirect injection vector.
-	// System messages are trusted; all other content is scanned.
-	//
-	// Content provenance: if the agent (via SDK) provides an
-	// X-Cicada-Content-Provenance header, the scan sensitivity is elevated
-	// for untrusted sources (retrieved documents, tool results).
-	if len(bodyBytes) > 0 {
-		provenance := injection.ParseProvenance(r.Header.Get("X-Cicada-Content-Provenance"))
-		injResult := injection.ScanWithProvenance(string(bodyBytes), "", provenance)
-		if injResult.Block {
-			summary := injection.Summary(injResult.Findings)
-			log.Printf("[INJECTION] Outbound body blocked for agent %s trace %s (provenance=%s): %s", agentID, traceID, provenance, summary)
-			edgeLedger.AppendRecord(ledger.EventRecord{
-		HumanContext: humanContextJSON,
-				EventID: fmt.Sprintf("evt-%d", time.Now().UnixNano()), TraceID: traceID,
-				TenantID: tenantID, AgentID: agentID, ActionClass: "proxy",
-				Decision: "deny", ReasonCodes: []string{"prompt_injection_outbound", "provenance:" + provenance}, RiskScore: injResult.Score,
+				HumanContext: humanContextJSON,
+				EventID:      fmt.Sprintf("evt-%d", time.Now().UnixNano()), TraceID: traceID,
+				TenantID:    tenantID, AgentID: agentID, ActionClass: "proxy",
+				TargetURL:   targetURL, Decision: "deny",
+				ReasonCodes: []string{"prompt_injection_outbound", "provenance:" + provenanceHdr},
+				RiskScore:   0.95,
 			})
 			go output.EmitThreatAlert(
 				"prompt_injection", "high", tenantID, agentID, targetURL,
-				fmt.Sprintf("Prompt injection detected in outbound request: %s", summary),
+				fmt.Sprintf("Prompt injection detected in outbound request: %s", pipeRes.BlockReason),
 				"Review agent output and investigate upstream data sources for injection payloads.", traceID, nil,
 			)
 			w.Header().Set("X-Cicada-Memory-Action", "flush")
 			w.Header().Set("X-Cicada-Flush-Reason", "prompt_injection_detected")
 			edgeLedger.AppendRecord(ledger.EventRecord{
-				EventID: fmt.Sprintf("evt-%d", time.Now().UnixNano()), TraceID: traceID,
-				TenantID: tenantID, AgentID: agentID, ActionClass: "memory_flush",
-				Decision: "flush_signalled", ReasonCodes: []string{"prompt_injection_detected"},
-				TargetURL: targetURL, RiskScore: injResult.Score,
+				EventID:     fmt.Sprintf("evt-%d", time.Now().UnixNano()), TraceID: traceID,
+				TenantID:    tenantID, AgentID: agentID, ActionClass: "memory_flush",
+				Decision:    "flush_signalled", ReasonCodes: []string{"prompt_injection_detected"},
+				TargetURL:   targetURL, RiskScore: 0.95,
 			})
-			writeError(w, fmt.Sprintf(`{"error":"prompt injection detected in request body","findings":"%s"}`, summary), http.StatusForbidden)
+			writeError(w, fmt.Sprintf(`{"error":"prompt injection detected in request body","findings":"%s"}`, pipeRes.BlockReason), http.StatusForbidden)
 			return
-		}
-		if len(injResult.Findings) > 0 {
-			log.Printf("[INJECTION] Non-blocking outbound findings for agent %s (provenance=%s): %s", agentID, provenance, injection.Summary(injResult.Findings))
+
+		case "semantic_intent":
+			if observeOnlyMode {
+				w.Header().Set("X-Cicada-Shadow-Flag", "true")
+				edgeLedger.AppendRecord(ledger.EventRecord{
+					HumanContext:    humanContextJSON,
+					EventID:         fmt.Sprintf("evt-%d", time.Now().UnixNano()), TraceID: traceID,
+					TenantID:        tenantID, AgentID: agentID, ActionClass: "proxy",
+					TargetURL:       targetURL, Decision: "shadow_allowed",
+					ReasonCodes:     []string{"semantic_intent_mismatch"}, RiskScore: 0.80, ShadowViolation: true,
+				})
+			} else {
+				edgeLedger.AppendRecord(ledger.EventRecord{
+					HumanContext: humanContextJSON,
+					EventID:      fmt.Sprintf("evt-%d", time.Now().UnixNano()), TraceID: traceID,
+					TenantID:     tenantID, AgentID: agentID, ActionClass: "proxy",
+					TargetURL:    targetURL, Decision: "deny",
+					ReasonCodes:  []string{"semantic_intent_mismatch"}, RiskScore: 0.80,
+				})
+				go output.EmitThreatAlert(
+					"semantic_mismatch", "high", tenantID, agentID, targetURL,
+					fmt.Sprintf("Semantic intent mismatch: %s", pipeRes.BlockReason),
+					"Review agent prompt and human context to ensure alignment. The agent may be hallucinating or under malicious control.", traceID, nil,
+				)
+				ghostmode.RecordViolation(r.Context(), agentID)
+				writeError(w, fmt.Sprintf(`{"error":"semantic intent mismatch — %s"}`, pipeRes.BlockReason), http.StatusForbidden)
+				return
+			}
+
+		case "velocity":
+			edgeLedger.AppendRecord(ledger.EventRecord{
+				HumanContext: humanContextJSON,
+				EventID:      fmt.Sprintf("evt-%d", time.Now().UnixNano()), TraceID: traceID,
+				TenantID:     tenantID, AgentID: agentID, ActionClass: "proxy",
+				TargetURL:    targetURL, Decision: "deny",
+				ReasonCodes:  []string{"velocity_exceeded"}, RiskScore: 0.75,
+			})
+			go output.EmitThreatAlert(
+				"velocity_breach", "medium", tenantID, agentID, targetURL,
+				fmt.Sprintf("Velocity limit exceeded: %s", pipeRes.BlockReason),
+				"Investigate agent loop behavior or potential denial-of-wallet attempt.", traceID, nil,
+			)
+			ghostmode.RecordViolation(r.Context(), agentID)
+			writeError(w, fmt.Sprintf(`{"error":"velocity limit exceeded — %s"}`, pipeRes.BlockReason), http.StatusTooManyRequests)
+			return
+
+		case "prerequisite", "tool_scope":
+			if observeOnlyMode {
+				w.Header().Set("X-Cicada-Shadow-Flag", "true")
+				edgeLedger.AppendRecord(ledger.EventRecord{
+					HumanContext:    humanContextJSON,
+					EventID:         fmt.Sprintf("evt-%d", time.Now().UnixNano()), TraceID: traceID,
+					TenantID:        tenantID, AgentID: agentID, ActionClass: "proxy",
+					TargetURL:       targetURL, Decision: "shadow_allowed",
+					ReasonCodes:     []string{pipeRes.BlockedBy}, RiskScore: 0.85, ShadowViolation: true,
+				})
+			} else {
+				edgeLedger.AppendRecord(ledger.EventRecord{
+					HumanContext: humanContextJSON,
+					EventID:      fmt.Sprintf("evt-%d", time.Now().UnixNano()), TraceID: traceID,
+					TenantID:     tenantID, AgentID: agentID, ActionClass: "proxy",
+					TargetURL:    targetURL, Decision: "deny",
+					ReasonCodes:  []string{pipeRes.BlockedBy, pipeRes.BlockReason}, RiskScore: 0.85,
+				})
+				ghostmode.RecordViolation(r.Context(), agentID)
+				writeError(w, fmt.Sprintf(`{"error":"%s violation — %s"}`, pipeRes.BlockedBy, pipeRes.BlockReason), http.StatusForbidden)
+				return
+			}
 		}
 	}
 
-	// ── 6b. Canary token exfiltration scan ───────────────────────────────────────
-	// Scan the outbound body for any honeytoken value previously injected into
-	// this agent's context by the verification swarm. A CICADA_CANARY_* value
-	// appearing in an outbound call is a zero-false-positive incident signal:
-	//
-	//  - No real API key starts with CICADA_CANARY_
-	//  - No legitimate business logic generates this prefix
-	//  - The ONLY way this token reaches a target API is via:
-	//      (a) data exfiltration — agent relaying the credential to an attacker
-	//      (b) credential misuse — agent attempting to authenticate with a stolen token
-	//      (c) prompt injection success — injected instructions told the agent to use it
-	//
-	// Auto-quarantine is applied on trigger. This is safe because false positives
-	// are impossible: the token is cryptographically random and prefixed uniquely.
-	// Quarantine propagates to all peer gateway nodes via the gossip mesh within
-	// milliseconds, closing the window before any retry attempt succeeds.
+	// ── 6b. Canary token exfiltration scan ────────────────────────────────────
 	if len(bodyBytes) > 0 {
 		if canaryTrigger := canary.CheckOutbound(r.Context(), tenantID, string(bodyBytes)); canaryTrigger != nil {
 			log.Printf("[CANARY] CRITICAL INCIDENT: exfiltration by agent=%s tenant=%s token=%s trace=%s",
 				canaryTrigger.AgentID, tenantID, canaryTrigger.TokenValue, traceID)
 			edgeLedger.AppendRecord(ledger.EventRecord{
-		HumanContext: humanContextJSON,
-				EventID:     fmt.Sprintf("evt-%d", time.Now().UnixNano()),
-				TraceID:     traceID,
-				TenantID:    tenantID,
-				AgentID:     agentID,
-				ActionClass: "canary_trigger",
-				Decision:    "deny",
-				ReasonCodes: []string{"honeytoken_exfiltration", "canary_token_detected"},
-				RiskScore:   1.0, // maximum: zero-false-positive incident
+				HumanContext: humanContextJSON,
+				EventID:      fmt.Sprintf("evt-%d", time.Now().UnixNano()),
+				TraceID:      traceID,
+				TenantID:     tenantID,
+				AgentID:      agentID,
+				ActionClass:  "canary_trigger",
+				Decision:     "deny",
+				ReasonCodes:  []string{"honeytoken_exfiltration", "canary_token_detected"},
+				RiskScore:    1.0,
 			})
-			// Quarantine via gossip mesh so all peer nodes stop admitting this agent.
 			gossipMesh.QuarantineAgent(agentID)
 			writeError(w, `{"error":"access denied"}`, http.StatusForbidden)
 			return
 		}
 	}
 
-	// ── 7. Semantic intent check ──────────────────────────────────────────────
-	// Compares the agent's declared description and agent_type (set at
-	// registration) against the runtime target URL and HTTP method using a
-	// rule-based lexical scoring algorithm — NOT an LLM call. Using an LLM to
-	// verify another LLM's intent is circular (the verifier can hallucinate too);
-	// a deterministic rule engine is fast, free, and impossible to prompt-inject.
-	//
-	// Example catch: a "customer support chat assistant" calling DELETE on a
-	// payments API has near-zero keyword overlap → blocked here regardless of
-	// whether its scopes and resource policies technically permit the call.
-	{
-		// Read from agentcache (populated at L1587) instead of a standalone
-		// DB query. This was the primary p95 latency bottleneck — every
-		// request previously hit Postgres here even when the cache had the data.
-		var agentDesc, agentType string
-		if agentCacheErr == nil {
-			agentDesc = agentCached.Description
-			agentType = agentCached.AgentType
-		} else {
-			// Context-bound DB fallback — inherits r.Context() deadline to
-			// prevent long-hanging queries if Postgres queues up under load.
-			err := store.DB.QueryRow(r.Context(),
-				`SELECT COALESCE(description,''), COALESCE(agent_type,'') FROM agents WHERE id = $1`,
-				agentID,
-			).Scan(&agentDesc, &agentType)
-			if err != nil {
-				log.Printf("[SEMANTIC] DB fallback failed for agent %s: %v", agentID, err)
+	// ── 5. CIBA last-hop authorization gate (Full-Payload + SHA-256 Bound) ───
+	// Triggered for write/transact scopes OR whenever any pipeline escalation
+	// layer (Drift Guard, Blast-Radius, Deontic Never-Rules / TxProfile, or
+	// CaMeL Session Taint) sets pipeRes.ForceCIBA.
+	if session.ScopesContainWriteOrTransact(sessionScopes) || pipeRes.ForceCIBA || r.Header.Get("X-Cicada-Skill-Criticality") == "high" {
+		// SECURITY FIX: Pass the FULL request body to TieredCheck (no 200-byte truncation)
+		// while keeping hitl.go substring weights at 0.40/0.30 so ordinary payments
+		// aren't spammed with false positives.
+		fullPayload := string(bodyBytes)
+		result := hitl.TieredCheck("", traceID, agentID, tenantID, targetURL, sessionScopes, fullPayload)
+		if result.Err != nil {
+			log.Printf("[CIBA] Tier 1 error for agent %s: %v", agentID, result.Err)
+		}
+
+		if r.Header.Get("X-Cicada-Skill-Criticality") == "high" {
+			if result.RiskScore < 0.8 {
+				result.RiskScore = 0.8
+			}
+			result.Approved = false
+			result.RiskReason = fmt.Sprintf("High-criticality skill contract: %s", targetSkill)
+		}
+
+		if pipeRes.ForceCIBA {
+			result.Approved = false
+			if result.RiskScore < 0.90 {
+				result.RiskScore = 0.90
+			}
+			escalationReasons := strings.Join(pipeRes.CIBAReasons, "; ")
+			if result.RiskReason != "" {
+				result.RiskReason = result.RiskReason + "; " + escalationReasons
+			} else {
+				result.RiskReason = escalationReasons
 			}
 		}
 
-		semanticResult := semantic.Check(agentDesc, agentType, targetURL, r.Method)
-		log.Printf("[SEMANTIC] agent=%s score=%.2f block=%v reason=%q", agentID, semanticResult.Score, semanticResult.Block, semanticResult.Reason)
-
-		if semanticResult.Block {
+		if !result.Approved {
 			if observeOnlyMode {
 				w.Header().Set("X-Cicada-Shadow-Flag", "true")
 				edgeLedger.AppendRecord(ledger.EventRecord{
-					HumanContext: humanContextJSON,
-					EventID: fmt.Sprintf("evt-%d", time.Now().UnixNano()), TraceID: traceID,
-					TenantID: tenantID, AgentID: agentID, ActionClass: "proxy",
-					TargetURL: targetURL,
-					Decision: "shadow_allowed", ReasonCodes: []string{"semantic_intent_mismatch"}, RiskScore: 0.80, ShadowViolation: true,
+					HumanContext:    humanContextJSON,
+					EventID:         fmt.Sprintf("evt-%d", time.Now().UnixNano()), TraceID: traceID,
+					TenantID:        tenantID, AgentID: agentID, ActionClass: "proxy",
+					TargetURL:       targetURL, Decision: "shadow_allowed",
+					ReasonCodes:     []string{"ciba_escalation_shadow", result.RiskReason},
+					RiskScore:       result.RiskScore, ShadowViolation: true,
 				})
 			} else {
+				log.Printf("[CIBA] Escalated to CIBA: agent=%s trace=%s score=%.2f reason=%q",
+					agentID, traceID, result.RiskScore, result.RiskReason)
+
+				displayDesc := agentDesc
+				if displayDesc == "" && agentCacheErr == nil {
+					displayDesc = agentCached.Name
+				}
+
+				go func() {
+					if store.DB == nil {
+						return
+					}
+					var pushToken string
+					_ = store.DB.QueryRow(r.Context(),
+						`SELECT push_token FROM mobile_devices
+						 WHERE tenant_id = $1 AND status = 'active'
+						 AND push_token IS NOT NULL
+						 ORDER BY paired_at DESC LIMIT 1`,
+						tenantID,
+					).Scan(&pushToken)
+					if pushToken != "" {
+						if err := fcm.SendHitlAlert(context.Background(), pushToken, traceID); err != nil {
+							log.Printf("[FCM] Push failed for tenant=%s hold=%s: %v", tenantID, traceID, err)
+						}
+					}
+				}()
+
+				boundHash := ciba.ComputePayloadHash(r.Method, targetURL, bodyBytes)
+				actionDetails := fmt.Sprintf("Agent '%s' is attempting %s %s", displayDesc, r.Method, targetURL)
+				if pipeRes.TxFeatures.ActionType != "" || pipeRes.TxFeatures.Amount > 0 || pipeRes.TxFeatures.RecipientID != "" {
+					actionDetails = fmt.Sprintf("%s [action=%s amount=%.2f %s recipient=%s]",
+						actionDetails, pipeRes.TxFeatures.ActionType, pipeRes.TxFeatures.Amount,
+						pipeRes.TxFeatures.Currency, pipeRes.TxFeatures.RecipientID)
+				}
+
+				cibaResult := ciba.Authorize(r.Context(), ciba.Request{
+					TraceID:        traceID,
+					AgentID:        agentID,
+					TenantID:       tenantID,
+					ActionSummary:  actionDetails,
+					TargetURL:      targetURL,
+					PayloadPreview: fullPayload,
+					PayloadHash:    boundHash,
+					RiskScore:      result.RiskScore,
+					RiskReason:     result.RiskReason,
+				})
+
+				if !cibaResult.Approved || !ciba.VerifyPayloadHash(cibaResult.PayloadHash, r.Method, targetURL, bodyBytes) {
+					edgeLedger.AppendRecord(ledger.EventRecord{
+						HumanContext: humanContextJSON,
+						EventID:      fmt.Sprintf("evt-%d", time.Now().UnixNano()), TraceID: traceID,
+						TenantID:     tenantID, AgentID: agentID, ActionClass: "proxy",
+						Decision:     fmt.Sprintf("ciba_%s", cibaResult.Status),
+						ReasonCodes:  []string{"ciba_denied", result.RiskReason},
+						RiskScore:    result.RiskScore,
+					})
+
+					var sagaRevertRoute string
+					if store.DB != nil {
+						_ = store.DB.QueryRow(r.Context(),
+							`SELECT COALESCE(saga_revert_route, '') FROM agents WHERE id = $1`,
+							agentID,
+						).Scan(&sagaRevertRoute)
+					}
+
+					if sagaRevertRoute != "" {
+						rollbackID := fmt.Sprintf("rb-%d", time.Now().UnixNano())
+						h := sha256.Sum256([]byte(traceID + "ciba_denied" + time.Now().String()))
+						if queueErr := queue.PushRollback(r.Context(), queue.SagaJob{
+							RollbackID:         rollbackID,
+							TraceID:            traceID,
+							OriginalActionHash: hex.EncodeToString(h[:]),
+							RevertRoute:        sagaRevertRoute,
+							FailedAction:       "ciba_denied",
+							IdempotencyKey:     traceID + ":ciba_denied",
+						}); queueErr != nil {
+							log.Printf("[SAGA] Failed to enqueue rollback for trace %s: %v", traceID, queueErr)
+						} else {
+							edgeLedger.AppendRecord(ledger.EventRecord{
+								HumanContext: humanContextJSON,
+								EventID:      fmt.Sprintf("evt-%d", time.Now().UnixNano()),
+								TraceID:      traceID,
+								TenantID:     tenantID, AgentID: agentID,
+								ActionClass:  "saga_compensate",
+								Decision:     "rollback_enqueued",
+								ReasonCodes:  []string{"saga_intent_published", "ciba_denied"},
+								RiskScore:    result.RiskScore,
+							})
+						}
+					}
+
+					w.Header().Set("Content-Type", "application/json")
+					w.WriteHeader(http.StatusForbidden)
+					w.Write([]byte(fmt.Sprintf(`{"error":"CIBA authorization %s","trace_id":"%s","risk_score":%.2f,"reason":"%s"}`,
+						cibaResult.Status, traceID, result.RiskScore, result.RiskReason)))
+					return
+				}
+
+				log.Printf("[CIBA] APPROVED by %s: agent=%s trace=%s payload_hash=%s",
+					cibaResult.RespondedBy, agentID, traceID, cibaResult.PayloadHash)
+				// Operator explicitly approved this action — clear session taint.
+				taint.ClearTaint(r.Context(), agentID)
 				edgeLedger.AppendRecord(ledger.EventRecord{
 					HumanContext: humanContextJSON,
-					EventID: fmt.Sprintf("evt-%d", time.Now().UnixNano()), TraceID: traceID,
-					TenantID: tenantID, AgentID: agentID, ActionClass: "proxy",
-					TargetURL: targetURL,
-					Decision: "deny", ReasonCodes: []string{"semantic_intent_mismatch"}, RiskScore: 0.80,
+					EventID:      fmt.Sprintf("evt-%d", time.Now().UnixNano()), TraceID: traceID,
+					TenantID:     tenantID, AgentID: agentID, ActionClass: "proxy",
+					Decision:     "ciba_approved",
+					ReasonCodes:  []string{"ciba_approved", fmt.Sprintf("by:%s", cibaResult.RespondedBy), "payload_hash:" + cibaResult.PayloadHash},
+					RiskScore:    result.RiskScore,
 				})
-				go output.EmitThreatAlert(
-					"semantic_mismatch", "high", tenantID, agentID, targetURL,
-					fmt.Sprintf("Semantic intent mismatch: %s", semanticResult.Reason),
-					"Review agent prompt and human context to ensure alignment. The agent may be hallucinating or under malicious control.", traceID, nil,
-				)
-				ghostmode.RecordViolation(r.Context(), agentID)
-				writeError(w, fmt.Sprintf(`{"error":"semantic intent mismatch — %s"}`, semanticResult.Reason), http.StatusForbidden)
-				return
 			}
-		}
-	}
-
-	// ── 8. Velocity circuit breaker ───────────────────────────────────────────
-	// Redis sliding-window counter for destructive (write/delete) calls per
-	// agent per minute. Catches runaway loop behaviour even when every individual
-	// call is semantically valid and policy-compliant. Separate from the Laravel
-	// confidence-score circuit breaker which fires on a longer time horizon and
-	// requires action_ledger data; this check fires in-band on the hot path with
-	// sub-millisecond latency.
-	//
-	// Example catch: a billing agent that legitimately charges customers starts
-	// issuing 50 POST /charges calls in 60 seconds due to a loop bug — each call
-	// looks individually valid but the rate is an anomaly that warrants blocking.
-	{
-		velResult := velocity.Check(r.Context(), agentID, r.Method)
-		if velResult.Exceeded {
-			log.Printf("[VELOCITY] Agent %s blocked: %d %s calls in %ds window (threshold %d)",
-				agentID, velResult.CurrentRate, velResult.CounterType, velResult.WindowSecs, velResult.Threshold)
-			edgeLedger.AppendRecord(ledger.EventRecord{
-				HumanContext: humanContextJSON,
-				EventID: fmt.Sprintf("evt-%d", time.Now().UnixNano()), TraceID: traceID,
-				TenantID: tenantID, AgentID: agentID, ActionClass: "proxy",
-				TargetURL: targetURL,
-				Decision: "deny", ReasonCodes: []string{"velocity_exceeded"}, RiskScore: 0.75,
-			})
-			go output.EmitThreatAlert(
-				"velocity_breach", "medium", tenantID, agentID, targetURL,
-				fmt.Sprintf("Velocity limit exceeded: %d %s calls in %ds window", velResult.CurrentRate, velResult.CounterType, velResult.WindowSecs),
-				"Investigate agent loop behavior or potential denial-of-wallet attempt.", traceID, nil,
-			)
-			ghostmode.RecordViolation(r.Context(), agentID)
-			writeError(w, fmt.Sprintf(`{"error":"velocity limit exceeded — %d %s calls in %ds window"}`,
-				velResult.CurrentRate, velResult.CounterType, velResult.WindowSecs), http.StatusTooManyRequests)
-			return
+		} else {
+			log.Printf("[CIBA] Tier 1 auto-approved: agent=%s trace=%s score=%.2f", agentID, traceID, result.RiskScore)
 		}
 	}
 
@@ -2631,14 +2660,20 @@ func handleAgentRequest(w http.ResponseWriter, r *http.Request) {
 			Body:      string(bodyBytes),
 		}
 
-		// Check if the request body declares eakf_enabled — this is the agent's
-		// intent signal. If set but the plugin is unavailable, fail closed.
+		// Check if the request body declares eakf_enabled OR if the server-side
+		// agent manifest declares destructive_capability / EAKF URL filter match.
 		var eakfIntent struct {
 			EAKFEnabled bool `json:"eakf_enabled"`
 		}
 		_ = json.Unmarshal(bodyBytes, &eakfIntent)
+		serverRequiresEAKF := eakfIntent.EAKFEnabled
+		if !serverRequiresEAKF && agentCacheErr == nil && agentCached.DestructiveCapability {
+			if interceptor, err := pluginMgr.GetInterceptor("eakf"); err == nil && interceptor.EventFilter(eakfReq) {
+				serverRequiresEAKF = true
+			}
+		}
 
-		if eakfIntent.EAKFEnabled {
+		if serverRequiresEAKF {
 			interceptor, interceptErr := pluginMgr.GetInterceptor("eakf")
 			if interceptErr != nil {
 				// §7.6C: Agent policy requests EAKF but plugin is unavailable.
@@ -2967,12 +3002,31 @@ func handleAgentRequest(w http.ResponseWriter, r *http.Request) {
 		log.Printf("[OUTPUT] Non-blocking findings for agent %s: %s", agentID, output.FindingsSummary(inspectResult.Findings))
 	}
 
-	// ── 13. Ledger write ──────────────────────────────────────────────────────
+	// ── 13. Post-Upstream Completion, Taint & Ledger Write ────────────────────
+	// Only record tool prerequisite completion and historical transaction profile
+	// updates AFTER the upstream HTTP call succeeds (2xx/3xx).
+	ledgerActionClass := actionScope
+	if resolvedToolID != "" {
+		ledgerActionClass = resolvedToolID
+	}
+	if resp.StatusCode >= 200 && resp.StatusCode < 400 {
+		if resolvedToolID != "" {
+			prerequisite.RecordCompletedTool(r.Context(), agentID, resolvedToolID)
+		}
+		go recordAgentTxSuccess(context.Background(), agentID, pipeRes.TxFeatures)
+	}
+	// CaMeL taint propagation: reading external data via GET or untrusted provenance
+	// marks the agent session tainted so subsequent state mutations require CIBA.
+	if r.Method == http.MethodGet || taint.IsUntrustedProvenance(provenanceHdr) {
+		taint.MarkTainted(r.Context(), agentID, "proxy:"+r.Method+":"+targetURL, "ingested external API response")
+	}
+
 	edgeLedger.AppendRecord(ledger.EventRecord{
-		HumanContext: humanContextJSON,
+		HumanContext:  humanContextJSON,
 		EventID:       fmt.Sprintf("evt-%d", time.Now().UnixNano()),
 		TraceID:       traceID, TenantID: tenantID, AgentID: agentID,
-		ActionClass:   actionScope, Decision: "allow",
+		ActionClass:   ledgerActionClass, Decision: "allow",
+		TargetURL:     targetURL,
 		PolicyVersion: "v1.4.2", ReasonCodes: []string{"policy_passed"}, RiskScore: 0.1,
 	})
 
@@ -3011,6 +3065,21 @@ func handleGhostProxy(w http.ResponseWriter, r *http.Request, agentID, traceID s
 	// Build the envelope the sandbox expects.
 	tenantID := r.Header.Get("X-Cicada-Tenant-ID")
 	targetURL := r.Header.Get("X-Cicada-Target-URL")
+
+	// Mark session tainted in Ghost Mode so any subsequent attempt to break out
+	// or mutate state is tracked and gated.
+	taint.MarkTainted(r.Context(), agentID, "ghost_sandbox:"+targetURL, "agent routed through ghost honeypot")
+	if edgeLedger != nil {
+		boundHash := ciba.ComputePayloadHash(r.Method, targetURL, bodyBytes)
+		edgeLedger.AppendRecord(ledger.EventRecord{
+			EventID:     fmt.Sprintf("evt-%d", time.Now().UnixNano()),
+			TraceID:     traceID, TenantID: tenantID, AgentID: agentID,
+			ActionClass: "ghost_proxy", TargetURL: targetURL,
+			Decision:    "ghost_diverted",
+			ReasonCodes: []string{"ghost_sandbox_envelope", "payload_hash:" + boundHash},
+			RiskScore:   0.85,
+		})
+	}
 
 	envelope, _ := json.Marshal(map[string]any{
 		"agent_id":   agentID,
@@ -3466,6 +3535,16 @@ func handleMCPExecution(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		gossipMesh.QuarantineAgent(target)
+		taint.MarkTainted(r.Context(), target, "aegis_mcp:quarantine_agent", "quarantined by Aegis-0")
+		if edgeLedger != nil {
+			edgeLedger.AppendRecord(ledger.EventRecord{
+				EventID:     fmt.Sprintf("evt-%d", time.Now().UnixNano()),
+				TraceID:     fmt.Sprintf("mcp-%d", time.Now().UnixNano()),
+				AgentID:     target, ActionClass: "mcp:quarantine_agent",
+				Decision:    "allow", ReasonCodes: []string{"aegis_control_plane"},
+				RiskScore:   1.0,
+			})
+		}
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte(`{"status":"success","action":"quarantine deployed"}`))
 
@@ -3735,6 +3814,13 @@ func handleLLMProxy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if r.Header.Get("X-Cicada-Memory-Action") == "flush" {
+		taint.ClearTaint(r.Context(), agentID)
+	}
+	if llmProv := r.Header.Get("X-Cicada-Content-Provenance"); taint.IsUntrustedProvenance(llmProv) {
+		taint.MarkTainted(r.Context(), agentID, "llm_proxy:provenance:"+llmProv, "LLM context ingested untrusted provenance")
+	}
+
 	// ── Detect provider and extract context window ────────────────────────────
 	provider := llmproxy.DetectProvider(targetURL)
 
@@ -3762,6 +3848,9 @@ func handleLLMProxy(w http.ResponseWriter, r *http.Request) {
 		// a document, a tool result) that has been included in the context and
 		// contains instructions designed to hijack the model's behaviour.
 		for _, msg := range messages {
+			if strings.EqualFold(msg.Role, "tool") || strings.EqualFold(msg.Role, "function") {
+				taint.MarkTainted(r.Context(), agentID, "llm_context:role="+msg.Role, "LLM context includes external tool/function output")
+			}
 			injResult := injection.Scan(msg.Content, msg.Role)
 			if injResult.Block {
 				summary := injection.Summary(injResult.Findings)
@@ -3794,6 +3883,7 @@ func handleLLMProxy(w http.ResponseWriter, r *http.Request) {
 		if contaminated {
 			log.Printf("[MEMISO] CONTAMINATION: agent %s context contains content from agent %s (trace %s)",
 				agentID, contaminatedBy, traceID)
+			taint.MarkTainted(r.Context(), agentID, "cross_agent:"+contaminatedBy, "cross-agent memory contamination detected")
 			// Non-blocking: log to ledger and continue. We do not block the call —
 			// contamination is an observation for Aegis-0 to investigate; blocking
 			// would tip off the attacker that they were detected.
@@ -3840,6 +3930,7 @@ func handleLLMProxy(w http.ResponseWriter, r *http.Request) {
 						"[MEMISO-SEM] SEMANTIC CONTAMINATION: agent=%s score=%.3f source=%s trace=%s",
 						agentID, simScore, semSource, traceID,
 					)
+					taint.MarkTainted(r.Context(), agentID, "semantic_cross_agent:"+semSource, "semantic cross-agent memory contamination detected")
 					edgeLedger.AppendRecord(ledger.EventRecord{
 		HumanContext: "",
 						EventID:            fmt.Sprintf("evt-%d", time.Now().UnixNano()),
@@ -4190,14 +4281,42 @@ func handleSimulatedRequest(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// ── Gate 4: Prompt Injection & Hidden HTML DOM Scanner ────────────────────
-	if len(bodyBytes) > 0 {
-		provenance := injection.ParseProvenance(r.Header.Get("X-Cicada-Content-Provenance"))
-		injResult := injection.ScanWithProvenance(string(bodyBytes), "", provenance)
-		if injResult.Block {
-			summary := injection.Summary(injResult.Findings)
-			latencyUs := time.Since(start).Microseconds()
-			log.Printf("[SIMULATION] [INJECTION BLOCKED] Agent %s outbound body blocked (provenance=%s, %dµs): %s", agentID, provenance, latencyUs, summary)
+	// ── Gate 4 & 5: Unified 9-Layer Admission Pipeline ────────────────────────
+	if r.Header.Get("X-Cicada-Memory-Action") == "flush" {
+		taint.ClearTaint(r.Context(), agentID)
+	}
+	agentDesc := r.Header.Get("X-Cicada-Agent-Description")
+	agentType := r.Header.Get("X-Cicada-Agent-Type")
+	provenance := r.Header.Get("X-Cicada-Content-Provenance")
+	clientToolID := r.Header.Get("X-Cicada-Tool-ID")
+	simTools, _ := agentcache.GetTools(r.Context(), agentID)
+	resolvedToolID, prereqMap, scopeMap := agentcache.ResolveToolForRequest(simTools, clientToolID, targetURL, r.Method)
+
+	simPipeRes := pipeline.Evaluate(r.Context(), pipeline.Request{
+		AgentID:             agentID,
+		TenantID:            tenantID,
+		AgentDescription:    agentDesc,
+		AgentType:           agentType,
+		TargetURL:           targetURL,
+		HTTPMethod:          r.Method,
+		Body:                string(bodyBytes),
+		Scopes:              scopes,
+		Provenance:          provenance,
+		ActionSummary:       r.Header.Get("X-Cicada-Action-Summary"),
+		ToolID:              resolvedToolID,
+		PrerequisiteMap:     prereqMap,
+		LedgerCheckFn: func(reqTool string) bool {
+			done, _ := prerequisite.HasCompletedPrerequisite(r.Context(), agentID, reqTool)
+			return done
+		},
+		ToolScopeMap:        scopeMap,
+		EndpointCriticality: r.Header.Get("X-Cicada-Skill-Criticality"),
+		TxProfile:           loadAgentTxProfile(r.Context(), agentID),
+	})
+
+	if !simPipeRes.Admitted {
+		latencyUs := time.Since(start).Microseconds()
+		if simPipeRes.BlockedBy == "injection_scan" {
 			w.Header().Set("X-Cicada-Memory-Action", "flush")
 			w.Header().Set("X-Cicada-Flush-Reason", "prompt_injection_detected")
 			if edgeLedger != nil {
@@ -4205,46 +4324,42 @@ func handleSimulatedRequest(w http.ResponseWriter, r *http.Request) {
 					EventID: fmt.Sprintf("evt-%d", time.Now().UnixNano()), TraceID: traceID,
 					TenantID: tenantID, AgentID: agentID, ActionClass: "proxy",
 					TargetURL: targetURL, Decision: "deny",
-					ReasonCodes: []string{"prompt_injection_outbound", "provenance:" + provenance}, RiskScore: injResult.Score,
+					ReasonCodes: []string{"prompt_injection_outbound", "provenance:" + provenance}, RiskScore: 0.95,
 				})
 			}
 			writeJSON(w, http.StatusForbidden, map[string]any{
 				"error":                  "prompt_injection_detected",
-				"findings":               summary,
-				"risk_score":             injResult.Score,
+				"findings":               simPipeRes.BlockReason,
+				"risk_score":             0.95,
 				"memory_action":          "flush",
 				"trace_id":               traceID,
 				"enforcement_latency_us": latencyUs,
 			})
 			return
 		}
+		if edgeLedger != nil {
+			edgeLedger.AppendRecord(ledger.EventRecord{
+				EventID: fmt.Sprintf("evt-%d", time.Now().UnixNano()), TraceID: traceID,
+				TenantID: tenantID, AgentID: agentID, ActionClass: "proxy",
+				TargetURL: targetURL, Decision: "deny",
+				ReasonCodes: []string{simPipeRes.BlockedBy}, RiskScore: 0.85,
+			})
+		}
+		statusCode := http.StatusForbidden
+		if simPipeRes.BlockedBy == "velocity" {
+			statusCode = http.StatusTooManyRequests
+		}
+		writeJSON(w, statusCode, map[string]any{
+			"error":                  simPipeRes.BlockedBy,
+			"reason":                 simPipeRes.BlockReason,
+			"trace_id":               traceID,
+			"enforcement_latency_us": latencyUs,
+		})
+		return
 	}
 
-	// ── Gate 5: Semantic Intent Alignment Engine (Non-LLM Lexical Scorer) ─────
-	agentDesc := r.Header.Get("X-Cicada-Agent-Description")
-	agentType := r.Header.Get("X-Cicada-Agent-Type")
-	if agentDesc != "" || agentType != "" {
-		semanticResult := semantic.Check(agentDesc, agentType, targetURL, r.Method)
-		if semanticResult.Block {
-			latencyUs := time.Since(start).Microseconds()
-			log.Printf("[SIMULATION] [SEMANTIC BLOCKED] Agent %s intent mismatch (score=%.2f, %dµs): %s", agentID, semanticResult.Score, latencyUs, semanticResult.Reason)
-			if edgeLedger != nil {
-				edgeLedger.AppendRecord(ledger.EventRecord{
-					EventID: fmt.Sprintf("evt-%d", time.Now().UnixNano()), TraceID: traceID,
-					TenantID: tenantID, AgentID: agentID, ActionClass: "proxy",
-					TargetURL: targetURL, Decision: "deny",
-					ReasonCodes: []string{"semantic_intent_mismatch"}, RiskScore: 0.80,
-				})
-			}
-			writeJSON(w, http.StatusForbidden, map[string]any{
-				"error":                  "semantic_intent_mismatch",
-				"reason":                 semanticResult.Reason,
-				"alignment_score":        semanticResult.Score,
-				"trace_id":               traceID,
-				"enforcement_latency_us": latencyUs,
-			})
-			return
-		}
+	if simPipeRes.ForceCIBA {
+		w.Header().Set("X-Cicada-CIBA-Escalated", "true")
 	}
 
 	// ── Gate 6: In-Memory OPA Rego Policy Evaluation ──────────────────────────
@@ -4334,11 +4449,19 @@ func handleSimulatedRequest(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// ── Gate 8: Immutable SQLite SHA-256 Edge Ledger Recording ────────────────
+	// ── Gate 8: Post-Execution Completion, Taint & Immutable SQLite Ledger ────
+	simActionClass := "proxy:call"
+	if resolvedToolID != "" {
+		simActionClass = resolvedToolID
+		prerequisite.RecordCompletedTool(r.Context(), agentID, resolvedToolID)
+	}
+	if r.Method == http.MethodGet || taint.IsUntrustedProvenance(provenance) {
+		taint.MarkTainted(r.Context(), agentID, "sim_proxy:"+r.Method+":"+targetURL, "simulated external response ingestion")
+	}
 	if edgeLedger != nil {
 		edgeLedger.AppendRecord(ledger.EventRecord{
 			EventID: fmt.Sprintf("evt-%d", time.Now().UnixNano()), TraceID: traceID,
-			TenantID: tenantID, AgentID: agentID, ActionClass: "proxy:call",
+			TenantID: tenantID, AgentID: agentID, ActionClass: simActionClass,
 			TargetURL: targetURL, Decision: "allow",
 			ReasonCodes: []string{"simulation_verified_allow"}, RiskScore: 0.0,
 		})
@@ -4383,10 +4506,68 @@ func handleSimulatedRequest(w http.ResponseWriter, r *http.Request) {
 				"canary_honeytoken_trap",
 				"prompt_injection_dom_scanner",
 				"semantic_intent_engine",
+				"velocity_impact_breaker",
+				"drift_guard",
+				"prerequisite_forward_saga",
+				"atomic_tool_scope",
+				"blast_radius_estimator",
+				"tx_profile_deontic_rules",
+				"camel_session_taint",
 				"opa_rego_policy",
 				"vault_exfiltration_dlp",
 				"sqlite_sha256_edge_ledger",
 			},
+			"force_ciba":   simPipeRes.ForceCIBA,
+			"ciba_reasons": simPipeRes.CIBAReasons,
+			"payload_hash": ciba.ComputePayloadHash(r.Method, targetURL, bodyBytes),
 		},
 	})
+}
+
+func loadAgentTxProfile(ctx context.Context, agentID string) txprofile.AgentProfile {
+	if queue.Client == nil || agentID == "" {
+		return txprofile.AgentProfile{}
+	}
+	raw, err := queue.Client.Get(ctx, "cicada:txprofile:"+agentID).Result()
+	if err != nil || raw == "" {
+		return txprofile.AgentProfile{}
+	}
+	prof, err := txprofile.UnmarshalProfile([]byte(raw))
+	if err != nil {
+		return txprofile.AgentProfile{}
+	}
+	return prof
+}
+
+func recordAgentTxSuccess(ctx context.Context, agentID string, feat txprofile.TransactionFeatures) {
+	if queue.Client == nil || agentID == "" {
+		return
+	}
+	if feat.Amount <= 0 && feat.RecipientID == "" && feat.ActionType == "" {
+		return
+	}
+	data, err := json.Marshal(feat)
+	if err != nil {
+		return
+	}
+	histKey := "cicada:txhistory:" + agentID
+	queue.Client.LPush(ctx, histKey, string(data))
+	queue.Client.LTrim(ctx, histKey, 0, 99)
+	queue.Client.Expire(ctx, histKey, 24*time.Hour)
+
+	entries, err := queue.Client.LRange(ctx, histKey, 0, 99).Result()
+	if err != nil || len(entries) == 0 {
+		return
+	}
+	history := make([]txprofile.TransactionFeatures, 0, len(entries))
+	for _, e := range entries {
+		var item txprofile.TransactionFeatures
+		if json.Unmarshal([]byte(e), &item) == nil {
+			history = append(history, item)
+		}
+	}
+	prof := txprofile.BuildProfileFromHistory(history)
+	if profBytes, err := txprofile.MarshalProfile(prof); err == nil {
+		queue.Client.Set(ctx, "cicada:txprofile:"+agentID, string(profBytes), 24*time.Hour)
+	}
 }

@@ -30,6 +30,7 @@ import (
 	"math/rand/v2"
 	"os"
 	"strconv"
+	"strings"
 	"sync/atomic"
 	"time"
 
@@ -60,6 +61,7 @@ var (
 var agentFlight singleflight.Group
 var fgaFlight singleflight.Group
 var skillsFlight singleflight.Group
+var toolsFlight singleflight.Group
 
 // CacheStats holds a point-in-time snapshot of cache performance counters.
 type CacheStats struct {
@@ -168,6 +170,15 @@ type FGAPolicy struct {
 	Active          bool     `json:"active"`
 }
 
+// ToolManifestEntry represents a registered tool from the agent_tools table,
+// providing server-side tool scope and Forward-Saga prerequisite bindings.
+type ToolManifestEntry struct {
+	ToolID               string `json:"tool_id"`
+	ToolName             string `json:"tool_name"`
+	ToolScope            string `json:"tool_scope"`
+	RequiresPreviousTool string `json:"requires_previous_tool"`
+}
+
 // cacheKeyAgent returns the Redis key for an agent's metadata hash.
 func cacheKeyAgent(agentID string) string {
 	return fmt.Sprintf("cicada:agent:%s", agentID)
@@ -181,6 +192,11 @@ func cacheKeyFGA(agentID string) string {
 // cacheKeySkills returns the Redis key for an agent's skill contracts cache.
 func cacheKeySkills(agentID string) string {
 	return fmt.Sprintf("cicada:skills:%s", agentID)
+}
+
+// cacheKeyTools returns the Redis key for an agent's tool manifest cache.
+func cacheKeyTools(agentID string) string {
+	return fmt.Sprintf("cicada:tools:%s", agentID)
 }
 
 // ttl returns the configured base cache TTL (without jitter).
@@ -459,7 +475,7 @@ func Invalidate(ctx context.Context, agentID string) {
 	if queue.Client == nil {
 		return
 	}
-	queue.Client.Del(ctx, cacheKeyAgent(agentID), cacheKeyFGA(agentID), cacheKeySkills(agentID))
+	queue.Client.Del(ctx, cacheKeyAgent(agentID), cacheKeyFGA(agentID), cacheKeySkills(agentID), cacheKeyTools(agentID))
 	log.Printf("[AGENTCACHE] Cache invalidated for agent %s", agentID)
 }
 
@@ -550,6 +566,141 @@ func populateSkillsCache(agentID string, skills map[string]SkillContract) {
 	if err := queue.Client.Set(ctx, key, string(data), jitteredTTL()).Err(); err != nil {
 		log.Printf("[AGENTCACHE] Failed to populate skills cache for agent %s: %v", agentID, err)
 	}
+}
+
+// ── Tools Manifest Cache (Server-Side Prerequisite & Atomic Scope Resolver) ──
+
+// GetTools retrieves the agent's active registered tools from Redis, falling
+// back to PostgreSQL (agent_tools table) via singleflight on cache miss.
+func GetTools(ctx context.Context, agentID string) ([]ToolManifestEntry, error) {
+	if queue.Client != nil {
+		key := cacheKeyTools(agentID)
+		data, err := queue.Client.Get(ctx, key).Result()
+		if err == nil && data != "" {
+			var tools []ToolManifestEntry
+			if err := json.Unmarshal([]byte(data), &tools); err == nil {
+				return tools, nil
+			}
+		}
+	}
+
+	v, err, _ := toolsFlight.Do(agentID, func() (interface{}, error) {
+		return fetchToolsFromPostgres(ctx, agentID)
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return v.([]ToolManifestEntry), nil
+}
+
+func fetchToolsFromPostgres(ctx context.Context, agentID string) ([]ToolManifestEntry, error) {
+	if store.DB == nil {
+		return nil, fmt.Errorf("both Redis and PostgreSQL unavailable")
+	}
+
+	rows, err := store.DB.Query(ctx,
+		`SELECT tool_id, COALESCE(tool_name, ''), COALESCE(tool_scope, ''), COALESCE(requires_previous_tool, '')
+		   FROM agent_tools
+		  WHERE agent_id = $1 AND is_active = true`,
+		agentID,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("tools query failed: %w", err)
+	}
+	defer rows.Close()
+
+	var tools []ToolManifestEntry
+	for rows.Next() {
+		var t ToolManifestEntry
+		if err := rows.Scan(&t.ToolID, &t.ToolName, &t.ToolScope, &t.RequiresPreviousTool); err != nil {
+			return nil, fmt.Errorf("tools row scan failed: %w", err)
+		}
+		tools = append(tools, t)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	if queue.Client != nil {
+		if tools == nil {
+			tools = []ToolManifestEntry{}
+		}
+		go populateToolsCache(agentID, tools)
+	}
+
+	return tools, nil
+}
+
+func populateToolsCache(agentID string, tools []ToolManifestEntry) {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	data, err := json.Marshal(tools)
+	if err != nil {
+		log.Printf("[AGENTCACHE] Failed to marshal tools for agent %s: %v", agentID, err)
+		return
+	}
+
+	key := cacheKeyTools(agentID)
+	if err := queue.Client.Set(ctx, key, string(data), jitteredTTL()).Err(); err != nil {
+		log.Printf("[AGENTCACHE] Failed to populate tools cache for agent %s: %v", agentID, err)
+	}
+}
+
+// ResolveToolForRequest derives the authoritative tool identity, prerequisite
+// map, and atomic tool scope map from the server-side tool manifest rather
+// than trusting client-controlled headers alone.
+func ResolveToolForRequest(tools []ToolManifestEntry, clientToolID, targetURL, httpMethod string) (string, map[string]string, map[string]string) {
+	if len(tools) == 0 {
+		return strings.TrimSpace(clientToolID), nil, nil
+	}
+
+	prereqMap := make(map[string]string, len(tools))
+	scopeMap := make(map[string]string, len(tools))
+	for _, t := range tools {
+		prereqMap[t.ToolID] = t.RequiresPreviousTool
+		scopeMap[t.ToolID] = t.ToolScope
+	}
+
+	trimmedClient := strings.TrimSpace(clientToolID)
+	if trimmedClient != "" {
+		if _, exists := prereqMap[trimmedClient]; exists {
+			return trimmedClient, prereqMap, scopeMap
+		}
+	}
+
+	// Server-side inference: match URL path/host tokens against registered tools.
+	urlLower := strings.ToLower(targetURL)
+	bestToolID := ""
+	bestScore := 0
+
+	for _, t := range tools {
+		score := 0
+		idTokens := strings.FieldsFunc(strings.ToLower(t.ToolID+" "+t.ToolName), func(r rune) bool {
+			return r == ':' || r == '_' || r == '-' || r == '/' || r == ' '
+		})
+		for _, tok := range idTokens {
+			if len(tok) >= 3 && strings.Contains(urlLower, tok) {
+				score += 2
+			}
+		}
+		if score > bestScore {
+			bestScore = score
+			bestToolID = t.ToolID
+		}
+	}
+
+	if bestToolID != "" {
+		return bestToolID, prereqMap, scopeMap
+	}
+
+	// If the agent has only one registered tool, bind the request to it.
+	if len(tools) == 1 {
+		return tools[0].ToolID, prereqMap, scopeMap
+	}
+
+	return trimmedClient, prereqMap, scopeMap
 }
 
 // parseJSONStringArray lightly parses a JSON string array without importing
