@@ -17,9 +17,9 @@ use Illuminate\Support\Facades\Log;
  *   1. Pre-shared key: X-Operator-Key header matched against OPERATOR_API_KEY env var.
  *      Set the same key in the Dashboard's NEXT_PUBLIC_OPERATOR_KEY env var.
  *
- *   2. Graceful degradation: If OPERATOR_API_KEY is NOT set in the environment,
- *      ALL requests are allowed through. This prevents lockout during development
- *      and allows gradual hardening — set the key when you're ready to enforce.
+ *   2. No key configured: requests pass through ONLY when APP_ENV is local or
+ *      testing (so a fresh clone works). In any other environment the route
+ *      returns 503 — admin routes never run unauthenticated in a deployment.
  *
  * Usage in routes:
  *   Route::middleware('operator.auth')->group(function () { ... });
@@ -30,10 +30,21 @@ class OperatorAuth
     {
         $expectedKey = env('OPERATOR_API_KEY');
 
-        // ── Graceful mode: no key configured → allow all (no lockout) ──────
+        // ── No key configured ─────────────────────────────────────────────
+        // Previously this allowed ALL requests in every environment, leaving
+        // quarantine, universal-revoke and other admin routes open in any
+        // deployment that forgot the key. Now it only passes through in
+        // local/testing, and fails closed everywhere else.
         if (!$expectedKey || $expectedKey === '') {
-            Log::warning('OperatorAuth: OPERATOR_API_KEY not set — admin routes are UNPROTECTED. Set this env var to enforce authentication.');
-            return $next($request);
+            if (app()->environment(['local', 'testing'])) {
+                Log::warning('OperatorAuth: OPERATOR_API_KEY not set — admin routes open because APP_ENV=' . app()->environment() . '. Set OPERATOR_API_KEY before deploying.');
+                return $next($request);
+            }
+            Log::error('OperatorAuth: OPERATOR_API_KEY not set outside local/testing — refusing admin request.');
+            return response()->json([
+                'status'  => 'error',
+                'message' => 'Operator authentication is not configured on this server (OPERATOR_API_KEY).',
+            ], 503);
         }
 
         // ── Enforcement mode: key is configured → validate ────────────────

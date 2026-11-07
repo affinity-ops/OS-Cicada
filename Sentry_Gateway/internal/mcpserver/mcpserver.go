@@ -22,12 +22,14 @@
 //     get_agent            — fetches an agent record by ID
 //     get_tenant           — fetches a tenant record by ID
 //
-//   Control tools (privileged — require HITL confirmation in Aegis-0):
-//     quarantine_agent     — quarantines an agent via gossip mesh
-//     release_agent        — releases a quarantined agent
-//     trigger_rollback     — enqueues a saga rollback for a trace
-//     engage_ghost_mode    — routes an agent to shadow sandbox
-//     release_ghost_mode   — returns agent to normal routing
+//   Control tools:
+//     quarantine_agent     — quarantines an agent via gossip mesh (immediate; restrictive)
+//     engage_ghost_mode    — routes an agent to shadow sandbox (immediate; restrictive)
+//     release_agent        — releases a quarantined agent        [server-side human approval]
+//     release_ghost_mode   — returns agent to normal routing     [server-side human approval]
+//     trigger_rollback     — enqueues a saga rollback for a trace [server-side human approval]
+//     activate_policy      — activates a policy revision         [server-side human approval]
+//   See approval.go for the approval flow.
 //
 // Protocol:
 // MCP over HTTP (streamable transport). Clients POST JSON-RPC 2.0 messages to
@@ -42,6 +44,7 @@ package mcpserver
 
 import (
 	"context"
+	"crypto/subtle"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -308,7 +311,7 @@ func Handler() http.HandlerFunc {
 			return
 		}
 		auth := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
-		if auth != expectedToken {
+		if subtle.ConstantTimeCompare([]byte(auth), []byte(expectedToken)) != 1 {
 			writeError(w, nil, errInvalidRequest, "invalid master signature")
 			return
 		}
@@ -368,6 +371,26 @@ func handleToolCall(w http.ResponseWriter, ctx context.Context, req Request) {
 	}
 
 	log.Printf("[MCP] Tool call: %s args=%v", params.Name, params.Arguments)
+
+	// Server-side human approval for privileged control tools (approval.go).
+	if IsGatedTool(params.Name) {
+		pendingID, refusal := checkApproval(params.Name, params.Arguments)
+		if refusal != "" {
+			log.Printf("[MCP CONTROL] %s refused: %s", params.Name, refusal)
+			writeError(w, req.ID, errInvalidRequest, refusal)
+			return
+		}
+		if pendingID != "" {
+			log.Printf("[MCP CONTROL] %s held for operator approval (%s)", params.Name, pendingID)
+			writeToolResult(w, req.ID, map[string]interface{}{
+				"status":      "approval_required",
+				"approval_id": pendingID,
+				"message":     "A human operator must approve this action (POST /v1/mcp/approvals/decide). Retry the identical call with arguments.approval_id once approved.",
+			})
+			return
+		}
+		log.Printf("[MCP CONTROL] %s executing with operator approval", params.Name)
+	}
 
 	switch params.Name {
 

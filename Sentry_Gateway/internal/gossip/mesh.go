@@ -282,13 +282,12 @@ func (m *Mesh) shipCompressedBatch(batch []string) {
 	if m.LocalEdPrivKey != nil {
 		// PQC hybrid path — dual-sign with Ed25519 + ML-DSA-65
 		edSigB64, mldsaSigB64 = SignBatch(payload, m.LocalEdPrivKey, m.LocalMLDSAPriv)
-	} else {
-		// Legacy HMAC path — deprecated, kept for rolling upgrades
-		secret := GossipSecret()
-		if secret != "" {
-			hmacHeader = ComputeHMAC(payload, secret)
-			log.Printf("[GOSSIP] DEPRECATION WARNING: Using shared HMAC authentication. Upgrade to per-peer PQC hybrid signing.")
-		}
+	}
+	// Legacy HMAC is attached whenever a shared secret is configured so that
+	// receivers still in HMAC mode keep working during a rolling upgrade.
+	// Receivers with a peer registry ignore it and require signatures.
+	if secret := GossipSecret(); secret != "" {
+		hmacHeader = ComputeHMAC(payload, secret)
 	}
 
 	// Resolve peer endpoints — use PeerRegistry if available, else legacy env var
@@ -337,6 +336,9 @@ func (m *Mesh) shipCompressedBatch(batch []string) {
 		authMode := "PQC-hybrid"
 		if edSigB64 == "" {
 			authMode = "HMAC-legacy"
+		}
+		if edSigB64 == "" && hmacHeader == "" {
+			authMode = "UNAUTHENTICATED (peers will reject)"
 		}
 		log.Printf("[GOSSIP] Pushed %d state updates (%db compressed) to %d peers [auth: %s]",
 			len(batch), len(payload), len(peerEndpoints), authMode)

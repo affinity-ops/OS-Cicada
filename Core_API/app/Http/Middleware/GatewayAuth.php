@@ -29,9 +29,18 @@ class GatewayAuth
     {
         $expectedKey = env('GATEWAY_INTERNAL_KEY');
 
-        // ── Graceful mode: no key configured → allow all ──────────────────
+        // ── No key configured ─────────────────────────────────────────────
+        // Pass through only in local/testing so a fresh clone works; fail
+        // closed in every other environment (previously: allow all, always).
         if (!$expectedKey || $expectedKey === '') {
-            return $next($request);
+            if (app()->environment(['local', 'testing'])) {
+                return $next($request);
+            }
+            \Illuminate\Support\Facades\Log::error('GatewayAuth: GATEWAY_INTERNAL_KEY not set outside local/testing — refusing internal request.');
+            return response()->json([
+                'status'  => 'error',
+                'message' => 'Gateway authentication is not configured on this server (GATEWAY_INTERNAL_KEY).',
+            ], 503);
         }
 
         // ── Enforcement mode: validate the shared secret ──────────────────

@@ -225,14 +225,8 @@ func TestMCP_ReleaseAgent(t *testing.T) {
 	ReleaseFn = func(agentID string) { releasedID = agentID }
 	defer func() { ReleaseFn = nil }()
 
-	handler := Handler()
-	w := httptest.NewRecorder()
-	handler(w, authedRequest(t, "tools/call", map[string]interface{}{
-		"name":      "release_agent",
-		"arguments": map[string]interface{}{"agent_id": "agent-safe-1"},
-	}))
-
-	resp := parseResponse(t, w)
+	// release_agent is gated: it executes only after operator approval.
+	resp := callWithApproval(t, "release_agent", map[string]interface{}{"agent_id": "agent-safe-1"})
 	if resp.Error != nil {
 		t.Fatalf("release should not error: %v", resp.Error)
 	}
@@ -275,14 +269,7 @@ func TestMCP_ReleaseGhostMode(t *testing.T) {
 	}
 	defer func() { ReleaseGhostModeFn = nil }()
 
-	handler := Handler()
-	w := httptest.NewRecorder()
-	handler(w, authedRequest(t, "tools/call", map[string]interface{}{
-		"name":      "release_ghost_mode",
-		"arguments": map[string]interface{}{"agent_id": "agent-clear-1"},
-	}))
-
-	resp := parseResponse(t, w)
+	resp := callWithApproval(t, "release_ghost_mode", map[string]interface{}{"agent_id": "agent-clear-1"})
 	if resp.Error != nil {
 		t.Fatalf("release ghost mode should not error: %v", resp.Error)
 	}
@@ -298,18 +285,11 @@ func TestMCP_TriggerRollback(t *testing.T) {
 	}
 	defer func() { TriggerRollbackFn = nil }()
 
-	handler := Handler()
-	w := httptest.NewRecorder()
-	handler(w, authedRequest(t, "tools/call", map[string]interface{}{
-		"name": "trigger_rollback",
-		"arguments": map[string]interface{}{
-			"trace_id":      "trace-abc",
-			"failed_action": "DELETE /v1/users/456",
-			"revert_route":  "https://api.stripe.com/v1/users",
-		},
-	}))
-
-	resp := parseResponse(t, w)
+	resp := callWithApproval(t, "trigger_rollback", map[string]interface{}{
+		"trace_id":      "trace-abc",
+		"failed_action": "DELETE /v1/users/456",
+		"revert_route":  "https://api.stripe.com/v1/users",
+	})
 	if resp.Error != nil {
 		t.Fatalf("rollback should not error: %v", resp.Error)
 	}

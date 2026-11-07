@@ -79,6 +79,9 @@ import (
 var (
 	opaEngine        *policy.Engine
 	gossipMesh       *gossip.Mesh
+	// gossipPeerRegistry is non-nil when CICADA_GOSSIP_PEERS_CONFIG is set;
+	// inbound gossip must then be signed by a registered peer.
+	gossipPeerRegistry *gossip.PeerRegistry
 	tenantKeyVault   *auth.KeyVault
 	sentryMeter      *billing.AtomicMeter
 	edgeLedger       *ledger.EdgeLedger
@@ -183,12 +186,32 @@ func main() {
 	// in the `sentry` PostgreSQL namespace. Shared tables are read from `public`.
 	if store.DB != nil {
 		log.Println("[STORE] Executing Sentry schema migrations in 'sentry' schema...")
-		migrationFiles, err := filepath.Glob("active_migrations/*.sql")
-		if err == nil {
-			for _, f := range migrationFiles {
-				if mErr := store.RunMigrations(ctx, f); mErr != nil {
-					log.Fatalf("[FATAL] Migration failed %s: %v", f, mErr)
-				}
+		// Resolve the migrations directory: CICADA_MIGRATIONS_DIR, then
+		// ./active_migrations (repo layout), then next to the binary. Previously
+		// a relative glob that found nothing was silently skipped, and the
+		// gateway then failed schema validation with a misleading hint.
+		var candidates []string
+		if d := os.Getenv("CICADA_MIGRATIONS_DIR"); d != "" {
+			candidates = append(candidates, d)
+		}
+		candidates = append(candidates, "active_migrations")
+		if exe, exeErr := os.Executable(); exeErr == nil {
+			candidates = append(candidates, filepath.Join(filepath.Dir(exe), "active_migrations"))
+		}
+		var migrationFiles []string
+		for _, dir := range candidates {
+			if files, _ := filepath.Glob(filepath.Join(dir, "*.sql")); len(files) > 0 {
+				migrationFiles = files
+				break
+			}
+		}
+		if len(migrationFiles) == 0 {
+			log.Fatalf("[FATAL] No gateway schema migrations found (looked in %v). "+
+				"Run the gateway from the Sentry_Gateway directory or set CICADA_MIGRATIONS_DIR.", candidates)
+		}
+		for _, f := range migrationFiles {
+			if mErr := store.RunMigrations(ctx, f); mErr != nil {
+				log.Fatalf("[FATAL] Migration failed %s: %v", f, mErr)
 			}
 		}
 
@@ -251,7 +274,29 @@ func main() {
 	if license.ActiveLicense != nil {
 		gossipTenantID = license.ActiveLicense.TenantID
 	}
-	gossipMesh = gossip.NewMesh(fmt.Sprintf("sentry-%s", hostname), gossipTenantID)
+	gossipNodeID := fmt.Sprintf("sentry-%s", hostname)
+	if v := os.Getenv("CICADA_GOSSIP_NODE_ID"); v != "" {
+		gossipNodeID = v
+	}
+	meshCfg := gossip.MeshConfig{NodeID: gossipNodeID, TenantID: gossipTenantID}
+	// Per-peer signed gossip (Ed25519, plus ML-DSA-65 when configured).
+	// CICADA_GOSSIP_PEERS_CONFIG points at a JSON array of PeerIdentity.
+	if peersPath := os.Getenv("CICADA_GOSSIP_PEERS_CONFIG"); peersPath != "" {
+		reg := gossip.NewPeerRegistry()
+		if err := reg.LoadPeersFromConfig(peersPath); err != nil {
+			log.Fatalf("[FATAL] Gossip peer registry: %v", err)
+		}
+		gossipPeerRegistry = reg
+		meshCfg.Peers = reg
+		meshCfg.EdPrivKey = auth.GlobalSentryPrivateKey
+		meshCfg.MLDSAPriv = os.Getenv("CICADA_GOSSIP_MLDSA65_PRIV")
+	}
+	// Fail closed: a node that ships gossip must be able to authenticate it.
+	peersConfigured := os.Getenv("CICADA_GOSSIP_PEERS") != "" || gossipPeerRegistry != nil
+	if peersConfigured && gossipPeerRegistry == nil && gossip.GossipSecret() == "" && os.Getenv("CICADA_DEV_MODE") != "true" {
+		log.Fatalf("[FATAL] CICADA_GOSSIP_PEERS is set but neither CICADA_GOSSIP_PEERS_CONFIG nor CICADA_GOSSIP_SECRET is configured — refusing to run an unauthenticated mesh")
+	}
+	gossipMesh = gossip.NewMeshWithConfig(meshCfg)
 
 	// ── Phase 6: KMS Vault ──
 	if (simulationMode || os.Getenv("CICADA_DEV_MODE") == "true") && os.Getenv("CICADA_AES_MASTER_KEY") == "" {
@@ -389,7 +434,7 @@ func main() {
 	// ── HTTP Router ──
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID)
-	r.Use(middleware.RealIP)
+	r.Use(trustedRealIP) // forwarding headers honoured only from CICADA_TRUSTED_PROXIES (see realip.go)
 	r.Use(tracing.Middleware) // OpenTelemetry: wraps every request in a span
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
@@ -523,11 +568,19 @@ func main() {
 	// package. Used by the operator dashboard and external monitoring.
 	r.Get("/metrics", func(w http.ResponseWriter, r *http.Request) {
 		stats := agentcache.Stats()
+		autoApproved, shadowSingle, escalated := hitl.ShadowStats()
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"service":   "cicada-sentry",
 			"timestamp": time.Now().UTC().Format(time.RFC3339),
 			"cache":     stats,
+			// HITL shadow-mode measurement: how many single-signal writes WOULD
+			// have gone to a human if HITL_SINGLE_SIGNAL_MODE=enforce were set.
+			"hitl": map[string]int64{
+				"tier1_auto_approved":        autoApproved,
+				"shadow_single_signal_would": shadowSingle,
+				"tier2_escalated":            escalated,
+			},
 		})
 	})
 
@@ -596,6 +649,9 @@ func main() {
 	r.Post("/v1/aegis/directives", handleAegisDirectives)
 	r.Post("/v1/aegis/mcp/execute", handleMCPExecution) // legacy endpoint — kept for backwards compatibility
 	r.Post("/v1/mcp", mcpserver.Handler())              // MCP JSON-RPC 2.0 — production endpoint for Aegis-0
+	// Human approval for privileged MCP control tools (operator token, not the Aegis token).
+	r.Get("/v1/mcp/approvals", mcpserver.ApprovalsHandler())
+	r.Post("/v1/mcp/approvals/decide", mcpserver.ApprovalsHandler())
 	r.Get("/v1/telemetry/city/{city_id}", handleWSCityTelemetry)
 	r.Post("/v1/sso/caep/webhook", caep.Handler(gossipMesh, edgeLedger)) // inbound CAEP: external IdP → Cicada revocation
 
@@ -1122,26 +1178,37 @@ func handleHealth(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// PostgreSQL — quick connectivity check via Core API
+	// PostgreSQL — the gateway's own connection pool.
 	postgresOK := false
-	postgresDetail := "not checked"
+	postgresDetail := "not configured"
+	if store.DB != nil {
+		pgCtx, pgCancel := context.WithTimeout(r.Context(), 2*time.Second)
+		defer pgCancel()
+		if err := store.DB.Ping(pgCtx); err == nil {
+			postgresOK = true
+			postgresDetail = "connected"
+		} else {
+			postgresDetail = "ping failed: " + err.Error()
+		}
+	}
+
+	// Core API — reachability via Laravel's unauthenticated /up health route
+	// (previously this probed an operator-only admin route).
 	coreAPI := os.Getenv("CICADA_CORE_API_URL")
 	if coreAPI == "" {
 		coreAPI = "http://localhost:8000"
 	}
-	pgCtx, pgCancel := context.WithTimeout(r.Context(), 2*time.Second)
-	defer pgCancel()
-	pgReq, _ := http.NewRequestWithContext(pgCtx, "GET", coreAPI+"/api/v1/agents?per_page=1", nil)
-	if pgResp, err := http.DefaultClient.Do(pgReq); err == nil {
-		pgResp.Body.Close()
-		if pgResp.StatusCode < 500 {
-			postgresOK = true
-			postgresDetail = "connected via Core API"
-		} else {
-			postgresDetail = fmt.Sprintf("Core API returned %d", pgResp.StatusCode)
-		}
+	coreOK := false
+	coreDetail := ""
+	coreCtx, coreCancel := context.WithTimeout(r.Context(), 2*time.Second)
+	defer coreCancel()
+	coreReq, _ := http.NewRequestWithContext(coreCtx, "GET", coreAPI+"/up", nil)
+	if coreResp, err := http.DefaultClient.Do(coreReq); err == nil {
+		coreResp.Body.Close()
+		coreOK = coreResp.StatusCode < 500
+		coreDetail = fmt.Sprintf("HTTP %d", coreResp.StatusCode)
 	} else {
-		postgresDetail = "Core API unreachable: " + err.Error()
+		coreDetail = "unreachable: " + err.Error()
 	}
 
 	// Ed25519 key
@@ -1157,7 +1224,7 @@ func handleHealth(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Central Ledger Sync
-	syncOK := postgresOK // sync depends on Core API connectivity
+	syncOK := coreOK // sync depends on Core API connectivity
 	syncDetail := ""
 	if syncOK {
 		syncDetail = "reachable"
@@ -1190,6 +1257,8 @@ func handleHealth(w http.ResponseWriter, r *http.Request) {
 		"service":         "cicada-sentry",
 		"postgres":        postgresOK,
 		"postgres_detail": postgresDetail,
+		"core_api":        coreOK,
+		"core_api_detail": coreDetail,
 		"redis":           redisOK,
 		"redis_detail":    redisDetail,
 		"ed25519":         ed25519OK,
@@ -1271,6 +1340,16 @@ func handleAgentRegistration(w http.ResponseWriter, r *http.Request) {
 
 	if spec.AgentID == "" || spec.CodeHash == "" {
 		writeError(w, `{"error":"agent_id and code_hash are required"}`, http.StatusBadRequest)
+		return
+	}
+
+	// ── Phase 3b: Registry binding (fail closed) ─────────────────────────
+	// Previously any caller could mint a gateway-signed EVAR for any agent_id,
+	// with any tenant and any scopes it asked for. Now the agent must already be
+	// provisioned, the tenant comes from the registry, and requested scopes must
+	// be a subset of the provisioned scope_entitlements.
+	if status, msg := authorizeRegistration(r, &spec); status != 0 {
+		writeError(w, msg, status)
 		return
 	}
 
@@ -1471,7 +1550,11 @@ func handleYAMLRegistration(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// CLEAN: Provisional EVAR
+	// CLEAN: Provisional EVAR — bound to the registry (same rules as /v1/agent/register).
+	if status, msg := authorizeRegistration(r, &spec); status != 0 {
+		writeError(w, msg, status)
+		return
+	}
 	token, err := auth.MintEVARToken(spec)
 	if err != nil {
 		log.Printf("[AUTH ERROR] EVAR minting failed for %s: %v", name, err)
@@ -2623,7 +2706,7 @@ func handleAgentRequest(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// ── 8. OPA policy evaluation ──────────────────────────────────────────────
-	actionScope := "proxy:call"
+	actionScope := proxyScopeForMethod(r.Method) // same method is used for the upstream call
 	// Override with MCP action type if MCP session was verified (ASI08).
 	if actionType != "" {
 		actionScope = actionType
@@ -3187,24 +3270,24 @@ func handleGossipReceive(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// ── Layer 2: HMAC-SHA256 verification (new) ──────────────────────────
-	// When CICADA_GOSSIP_SECRET is configured, every incoming batch must
-	// include a valid X-Gossip-HMAC header. This prevents any host that
-	// passes the IP allowlist (e.g. a compromised internal service) from
-	// injecting quarantine/release state into the CRDT mesh.
-	gossipSecret := gossip.GossipSecret()
-	if gossipSecret != "" {
-		providedHMAC := r.Header.Get("X-Gossip-HMAC")
-		if providedHMAC == "" {
-			log.Printf("[GOSSIP] SECURITY: Rejected gossip from %s — missing X-Gossip-HMAC header", remoteIP)
-			writeError(w, `{"error":"gossip receive: missing HMAC authentication"}`, http.StatusForbidden)
-			return
-		}
-		if !gossip.VerifyHMAC(compressed, providedHMAC, gossipSecret) {
-			log.Printf("[GOSSIP] SECURITY: Rejected gossip from %s — invalid HMAC signature", remoteIP)
-			writeError(w, `{"error":"gossip receive: invalid HMAC signature"}`, http.StatusForbidden)
-			return
-		}
+	// ── Layer 2: Batch authentication (fail closed) ───────────────────────
+	// Signed batches from a registered peer (Ed25519 + ML-DSA-65), or the
+	// legacy shared-secret HMAC when no registry is configured. Loopback is
+	// NOT trusted on its own: without this, any process on the gateway host
+	// could post a release and un-quarantine an agent. Unsigned loopback
+	// traffic is accepted only in CICADA_DEV_MODE.
+	isLoopback := remoteIP == "127.0.0.1" || remoteIP == "::1"
+	devLoopback := os.Getenv("CICADA_DEV_MODE") == "true" && isLoopback
+	authMode, authErr := gossip.AuthenticateBatch(compressed, gossip.BatchAuth{
+		NodeID:   r.Header.Get("X-Gossip-Node-ID"),
+		EdSig:    r.Header.Get("X-Gossip-Sig-Ed25519"),
+		MLDSASig: r.Header.Get("X-Gossip-Sig-MLDSA65"),
+		HMAC:     r.Header.Get("X-Gossip-HMAC"),
+	}, gossipPeerRegistry, gossip.GossipSecret(), devLoopback)
+	if authErr != nil {
+		log.Printf("[GOSSIP] SECURITY: Rejected gossip from %s: %v", remoteIP, authErr)
+		writeError(w, `{"error":"gossip receive: authentication failed"}`, http.StatusForbidden)
+		return
 	}
 
 	zr, err := zlib.NewReader(bytes.NewReader(compressed))
@@ -3261,7 +3344,7 @@ func handleGossipReceive(w http.ResponseWriter, r *http.Request) {
 		applied++
 	}
 
-	log.Printf("[GOSSIP] Applied %d state updates from peer %s", applied, remoteIP)
+	log.Printf("[GOSSIP] Applied %d state updates from peer %s [auth: %s]", applied, remoteIP, authMode)
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte(fmt.Sprintf(`{"applied":%d}`, applied)))
 }

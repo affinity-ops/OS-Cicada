@@ -69,7 +69,10 @@ class ProvisioningController extends Controller
             // Use the authenticated tenant from portal.auth middleware — no orphan tenant creation.
             $tenantId = $request->attributes->get('portal_tenant_id');
             $agentId  = (string) Str::uuid();
-            $scopes   = $validated['scopes']   ?? ['proxy:chat'];
+            // Gateway scope vocabulary: proxy:read | proxy:write | proxy:delete | proxy:call
+            // (see Sentry_Gateway/internal/policy/opa_engine.go). The previous default,
+            // 'proxy:chat', was not recognised by the gateway policy.
+            $scopes   = $validated['scopes']   ?? ['proxy:read', 'proxy:write'];
             $role     = $validated['role']      ?? 'autonomous';
             // Validate role against PostgreSQL CHECK constraint (agents_role_check).
             // The DB only accepts: orchestrator, sub_agent, peer, autonomous, tool_executor.
@@ -210,7 +213,9 @@ class ProvisioningController extends Controller
 
             // Step 3: Call the Sentry Gateway to mint a real Ed25519 JWT.
             $gatewayUrl = rtrim(env('CICADA_GATEWAY_URL', 'http://localhost:8080'), '/');
-            $mintResponse = Http::timeout(10)->post("{$gatewayUrl}/v1/agent/register", [
+            $mintResponse = Http::timeout(10)
+                ->withHeaders(['X-Gateway-Secret' => (string) env('GATEWAY_INTERNAL_KEY', '')])
+                ->post("{$gatewayUrl}/v1/agent/register", [
                 'agent_id'                  => $agentId,
                 'code_hash'                 => hash('sha256', $validated['agent_name']),
                 'scopes'                    => $scopes,

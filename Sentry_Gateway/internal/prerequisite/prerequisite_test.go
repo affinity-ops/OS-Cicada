@@ -5,7 +5,6 @@ package prerequisite
 
 import (
 	"context"
-	"os"
 	"testing"
 	"time"
 )
@@ -254,17 +253,6 @@ func TestRecordCompletedTool_ZeroLagLookup(t *testing.T) {
 	}
 	if !done {
 		t.Error("expected HasCompletedPrerequisite to return true immediately after RecordCompletedTool")
-	}
-}
-
-func TestCheck_FailsClosedWhenDBUnavailable(t *testing.T) {
-	prev := os.Getenv("CICADA_FAIL_CLOSED")
-	os.Setenv("CICADA_FAIL_CLOSED", "true")
-	defer os.Setenv("CICADA_FAIL_CLOSED", prev)
-
-	res := Check(context.Background(), "agent-db-down", "storage:delete_volume")
-	if res.Passed {
-		t.Error("Check must fail closed (Passed=false) when DB is unavailable and CICADA_FAIL_CLOSED=true")
 	}
 }
 

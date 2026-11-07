@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import 'dart:async';
+import 'dart:convert';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../core/crypto/ed25519_service.dart';
 import '../../../core/crypto/ml_dsa_service.dart';
@@ -83,6 +84,15 @@ class DecisionBloc extends Cubit<DecisionState> {
     emit(DecisionPending(alert));
   }
 
+  /// Builds the canonical length-prefixed signing payload verified by the
+  /// gateway in `HandleBatchDecisions`:
+  /// `<len>:hold_ref\n<len>:decision\n<len>:nonce\n<len>:timestamp\n<len>:hash`
+  ///
+  /// Lengths are UTF-8 byte counts so they match Go's `len()` exactly.
+  static String formatLengthPrefixedPayload(List<String> fields) {
+    return fields.map((f) => '${utf8.encode(f).length}:$f').join('\n');
+  }
+
   /// Approve the current action — requires biometric authentication.
   Future<void> approveAction(HitlAlert alert) async {
     await _executeDecision(alert, 'APPROVE');
@@ -115,12 +125,13 @@ class DecisionBloc extends Cubit<DecisionState> {
       final timestamp = DateTime.now().toUtc().toIso8601String();
       final payloadHash = alert.payloadHash.isNotEmpty ? alert.payloadHash : alert.holdRef;
 
-      final signingPayload =
-          '${alert.holdRef.length}:${alert.holdRef}\n'
-          '${decision.length}:$decision\n'
-          '${nonce.length}:$nonce\n'
-          '${timestamp.length}:$timestamp\n'
-          '${payloadHash.length}:$payloadHash';
+      final signingPayload = DecisionBloc.formatLengthPrefixedPayload([
+        alert.holdRef,
+        decision,
+        nonce,
+        timestamp,
+        payloadHash,
+      ]);
 
       // ── Sign with Ed25519 (classical) ───────────────────────────────
       final signature = await ed25519Service.sign(signingPayload);

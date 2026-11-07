@@ -18,12 +18,31 @@ package cicada.agent.authz
 
 default allow = false
 
-# Allow if the target action matches the agent's EVAR allowed scopes
+# Scope vocabulary (shared with Core API provisioning and the demo seeders):
+#   proxy:read   — GET / HEAD / OPTIONS through the proxy
+#   proxy:write  — POST / PUT / PATCH through the proxy
+#   proxy:delete — DELETE through the proxy
+#   proxy:call   — umbrella: any proxied method
+# The gateway sets input.action_scope from the HTTP method (or the verified MCP
+# action type). Previously the policy only accepted "proxy:call" while the
+# portal provisioned "proxy:chat" and the seeders "proxy:read/write", so no
+# provisioned agent could ever be allowed.
+
 allow {
-    some i
-    input.evar_scopes[i] == input.action_scope
+    scope_granted
     not is_blacklisted
     not is_over_budget
+}
+
+scope_granted {
+    some i
+    input.evar_scopes[i] == input.action_scope
+}
+
+scope_granted {
+    some i
+    input.evar_scopes[i] == "proxy:call"
+    startswith(input.action_scope, "proxy:")
 }
 
 is_blacklisted {

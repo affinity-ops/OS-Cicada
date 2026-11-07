@@ -290,8 +290,9 @@ void main() {
       ]);
       final sig = await ed25519.sign(payload);
 
-      // The payload format must be length-prefixed: <byte_len>:<field>|...
-      expect(payload, equals('11:hold-ref-42|6:REJECT|9:nonce-val|20:2026-05-26T12:00:00Z|19:sha256-payload-hash|'));
+      // The payload format must be length-prefixed and newline-separated:
+      // <byte_len>:<field>\n... (no trailing separator)
+      expect(payload, equals('11:hold-ref-42\n6:REJECT\n9:nonce-val\n20:2026-05-26T12:00:00Z\n19:sha256-payload-hash'));
 
       // Signature must be base64-encoded 64 bytes
       final rawSig = base64Decode(sig);

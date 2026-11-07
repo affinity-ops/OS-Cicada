@@ -162,7 +162,9 @@ class YamlProvisioningController extends Controller
 
             // 4. Call the Sentry Gateway to mint an EVAR
             $gatewayUrl = rtrim(env('CICADA_GATEWAY_URL', 'http://localhost:8080'), '/');
-            $mintResponse = Http::timeout(10)->post("{$gatewayUrl}/v1/agent/register", [
+            $mintResponse = Http::timeout(10)
+                ->withHeaders(['X-Gateway-Secret' => (string) env('GATEWAY_INTERNAL_KEY', '')])
+                ->post("{$gatewayUrl}/v1/agent/register", [
                 'agent_id'                  => $agentId,
                 'code_hash'                 => hash('sha256', $identity['name'] ?? 'yaml-agent'),
                 'scopes'                    => $scopes,

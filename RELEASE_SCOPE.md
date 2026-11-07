@@ -63,68 +63,55 @@ All five agent-facing handlers in `Sentry_Gateway/cmd/sentry/main.go` are wired 
 
 ## 4. Verification Record (`go test ./...` & `govulncheck ./...`)
 
-### `go test ./...` Output (`Sentry_Gateway`)
+### `go test -count=1 ./...` Output (`Sentry_Gateway`, uncached, 2026-11-07)
+
+Run with `CICADA_SIMULATION_MODE=true CICADA_DEV_MODE=true go test -count=1 ./...`. Packages with no test files are omitted. Several suites start local `httptest` servers, so they need loopback networking; in a network-restricted sandbox they fail with `connect: operation not permitted`.
 
 ```text
-?   	github.com/asai/cicada/sentry/cmd/eakfd	[no test files]
-?   	github.com/asai/cicada/sentry/cmd/mint_test_evar	[no test files]
-ok  	github.com/asai/cicada/sentry/cmd/sentry	1.363s
-?   	github.com/asai/cicada/sentry/cmd/sidecar	[no test files]
-?   	github.com/asai/cicada/sentry/cmd/sim_handshake	[no test files]
-ok  	github.com/asai/cicada/sentry/internal/agentcache	0.412s
-ok  	github.com/asai/cicada/sentry/internal/auth	2.416s
-?   	github.com/asai/cicada/sentry/internal/billing	[no test files]
-ok  	github.com/asai/cicada/sentry/internal/blastradius	0.388s
-ok  	github.com/asai/cicada/sentry/internal/caep	0.395s
-ok  	github.com/asai/cicada/sentry/internal/canary	0.421s
-ok  	github.com/asai/cicada/sentry/internal/cascade	0.402s
-ok  	github.com/asai/cicada/sentry/internal/chain	0.419s
-?   	github.com/asai/cicada/sentry/internal/ciba	[no test files]
-ok  	github.com/asai/cicada/sentry/internal/drift	0.440s
-ok  	github.com/asai/cicada/sentry/internal/eakfd/scrub	0.415s
-?   	github.com/asai/cicada/sentry/internal/fcm	[no test files]
-ok  	github.com/asai/cicada/sentry/internal/federation	0.901s
-ok  	github.com/asai/cicada/sentry/internal/fga	0.390s
-?   	github.com/asai/cicada/sentry/internal/ghostmode	[no test files]
-ok  	github.com/asai/cicada/sentry/internal/gossip	0.451s
-?   	github.com/asai/cicada/sentry/internal/heartbeat	[no test files]
-ok  	github.com/asai/cicada/sentry/internal/hitl	5.255s
-ok  	github.com/asai/cicada/sentry/internal/injection	0.489s
-ok  	github.com/asai/cicada/sentry/internal/ledger	0.612s
-ok  	github.com/asai/cicada/sentry/internal/license	0.405s
-ok  	github.com/asai/cicada/sentry/internal/llmproxy	0.431s
-ok  	github.com/asai/cicada/sentry/internal/mcpserver	0.448s
-?   	github.com/asai/cicada/sentry/internal/memory	[no test files]
-?   	github.com/asai/cicada/sentry/internal/mobile	[no test files]
-ok  	github.com/asai/cicada/sentry/internal/output	5.501s
-ok  	github.com/asai/cicada/sentry/internal/pipeline	1.999s
-ok  	github.com/asai/cicada/sentry/internal/plugin	2.932s
-ok  	github.com/asai/cicada/sentry/internal/policy	0.824s
-?   	github.com/asai/cicada/sentry/internal/policystore	[no test files]
-ok  	github.com/asai/cicada/sentry/internal/prerequisite	0.408s
-?   	github.com/asai/cicada/sentry/internal/queue	[no test files]
-ok  	github.com/asai/cicada/sentry/internal/rolemapping	0.392s
-ok  	github.com/asai/cicada/sentry/internal/roles	0.387s
-ok  	github.com/asai/cicada/sentry/internal/rotation	0.401s
-ok  	github.com/asai/cicada/sentry/internal/saga	5.407s
-ok  	github.com/asai/cicada/sentry/internal/scim	0.419s
-ok  	github.com/asai/cicada/sentry/internal/secrets	0.460s
-ok  	github.com/asai/cicada/sentry/internal/semantic	0.472s
-ok  	github.com/asai/cicada/sentry/internal/session	0.415s
-ok  	github.com/asai/cicada/sentry/internal/shadow	0.488s
-ok  	github.com/asai/cicada/sentry/internal/slm	4.402s
-ok  	github.com/asai/cicada/sentry/internal/slogger	0.410s
-ok  	github.com/asai/cicada/sentry/internal/ssrf	5.535s
-?   	github.com/asai/cicada/sentry/internal/store	[no test files]
-ok  	github.com/asai/cicada/sentry/internal/taint	0.436s
-ok  	github.com/asai/cicada/sentry/internal/threatintel	0.412s
-ok  	github.com/asai/cicada/sentry/internal/toolscope	0.409s
-ok  	github.com/asai/cicada/sentry/internal/tracing	3.951s
-ok  	github.com/asai/cicada/sentry/internal/txprofile	0.445s
-ok  	github.com/asai/cicada/sentry/internal/velocity	0.450s
-?   	github.com/asai/cicada/sentry/pkg/eakf/v1	[no test files]
-ok  	github.com/asai/cicada/sentry/pkg/pqc	0.512s
-ok  	github.com/asai/cicada/sentry/tests/integration	5.204s
+ok  	github.com/asai/cicada/sentry/cmd/sentry	1.334s
+ok  	github.com/asai/cicada/sentry/internal/agentcache	1.974s
+ok  	github.com/asai/cicada/sentry/internal/auth	2.729s
+ok  	github.com/asai/cicada/sentry/internal/blastradius	3.192s
+ok  	github.com/asai/cicada/sentry/internal/caep	2.903s
+ok  	github.com/asai/cicada/sentry/internal/canary	2.751s
+ok  	github.com/asai/cicada/sentry/internal/cascade	4.624s
+ok  	github.com/asai/cicada/sentry/internal/chain	2.438s
+ok  	github.com/asai/cicada/sentry/internal/drift	2.383s
+ok  	github.com/asai/cicada/sentry/internal/eakfd/scrub	2.884s
+ok  	github.com/asai/cicada/sentry/internal/federation	2.655s
+ok  	github.com/asai/cicada/sentry/internal/fga	2.623s
+ok  	github.com/asai/cicada/sentry/internal/gossip	2.365s
+ok  	github.com/asai/cicada/sentry/internal/hitl	2.832s
+ok  	github.com/asai/cicada/sentry/internal/injection	2.916s
+ok  	github.com/asai/cicada/sentry/internal/ledger	3.343s
+ok  	github.com/asai/cicada/sentry/internal/license	2.695s
+ok  	github.com/asai/cicada/sentry/internal/llmproxy	2.661s
+ok  	github.com/asai/cicada/sentry/internal/mcpserver	2.195s
+ok  	github.com/asai/cicada/sentry/internal/output	1.678s
+ok  	github.com/asai/cicada/sentry/internal/pipeline	2.352s
+ok  	github.com/asai/cicada/sentry/internal/plugin	2.742s
+ok  	github.com/asai/cicada/sentry/internal/policy	2.864s
+ok  	github.com/asai/cicada/sentry/internal/prerequisite	2.828s
+ok  	github.com/asai/cicada/sentry/internal/rolemapping	2.595s
+ok  	github.com/asai/cicada/sentry/internal/roles	2.147s
+ok  	github.com/asai/cicada/sentry/internal/rotation	2.085s
+ok  	github.com/asai/cicada/sentry/internal/saga	2.221s
+ok  	github.com/asai/cicada/sentry/internal/scim	2.413s
+ok  	github.com/asai/cicada/sentry/internal/secrets	2.514s
+ok  	github.com/asai/cicada/sentry/internal/semantic	2.236s
+ok  	github.com/asai/cicada/sentry/internal/session	2.069s
+ok  	github.com/asai/cicada/sentry/internal/shadow	2.099s
+ok  	github.com/asai/cicada/sentry/internal/slm	2.134s
+ok  	github.com/asai/cicada/sentry/internal/slogger	2.014s
+ok  	github.com/asai/cicada/sentry/internal/ssrf	2.109s
+ok  	github.com/asai/cicada/sentry/internal/taint	2.152s
+ok  	github.com/asai/cicada/sentry/internal/threatintel	1.968s
+ok  	github.com/asai/cicada/sentry/internal/toolscope	2.177s
+ok  	github.com/asai/cicada/sentry/internal/tracing	1.548s
+ok  	github.com/asai/cicada/sentry/internal/txprofile	2.066s
+ok  	github.com/asai/cicada/sentry/internal/velocity	1.940s
+ok  	github.com/asai/cicada/sentry/pkg/pqc	1.978s
+ok  	github.com/asai/cicada/sentry/tests/integration	1.555s
 ```
 
 ### `govulncheck ./...` Output (`Sentry_Gateway`)

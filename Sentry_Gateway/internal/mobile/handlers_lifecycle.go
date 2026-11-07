@@ -9,6 +9,7 @@ package mobile
 
 import (
 	"crypto/ed25519"
+	"crypto/subtle"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -458,16 +459,26 @@ func HandleBatchDecisions(w http.ResponseWriter, r *http.Request) {
 		// Ed25519-only verification (backward compatibility during rollout).
 
 		// ── Step 3: Verify hold_payload_hash matches stored payload ───────
+		// The expected hash MUST be derived exactly as in the pending-alerts
+		// query above (CIBA payload commitment first, ciphertext digest as
+		// fallback); otherwise every approval for a hold that carries a CIBA
+		// payload hash would be rejected as a mismatch.
 		var storedHash string
 		err = DB.QueryRow(ctx,
-			`SELECT encode(digest(ciphertext, 'sha256'), 'hex')
-			 FROM hold_payloads WHERE hold_ref = $1`,
+			`SELECT COALESCE(car.hold_payload_hash, encode(digest(hp.ciphertext, 'sha256'), 'hex'), '')
+			 FROM hold_payloads hp
+			 LEFT JOIN ciba_authorization_requests car ON car.trace_id = hp.hold_ref
+			 WHERE hp.hold_ref = $1`,
 			d.HoldRef,
 		).Scan(&storedHash)
-		// If we have a stored hash, verify it matches. If the hold_payloads
-		// table doesn't have this record (e.g. expired), we still proceed
-		// but log a warning — the nonce check below will catch expired holds.
-		if err == nil && storedHash != "" && d.HoldPayloadHash != storedHash {
+		// Fail closed: a decision cannot be bound to an action we cannot find.
+		if err != nil || storedHash == "" {
+			log.Printf("[MOBILE] hold_payload_hash UNAVAILABLE: hold=%s err=%v", d.HoldRef, err)
+			result["error"] = "hold payload not found — decision cannot be bound to an action"
+			results = append(results, result)
+			continue
+		}
+		if subtle.ConstantTimeCompare([]byte(d.HoldPayloadHash), []byte(storedHash)) != 1 {
 			log.Printf("[MOBILE] hold_payload_hash MISMATCH: hold=%s expected=%s got=%s",
 				d.HoldRef, storedHash, d.HoldPayloadHash)
 			result["error"] = "hold_payload_hash does not match stored action — possible action substitution"

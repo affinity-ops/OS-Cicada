@@ -493,6 +493,7 @@ def cmd_register(args):
         response = requests.post(
             f"{gateway_url}/v1/agent/register",
             json=registration,
+            headers={"X-Gateway-Secret": os.environ.get("CICADA_GATEWAY_SECRET", "")},
             timeout=10,
         )
 

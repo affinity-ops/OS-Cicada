@@ -180,6 +180,7 @@ class GoldStandardAgentSeeder extends Seeder
 
         for ($i = 0; $i < 80; $i++) {
             $ledgerData = [
+                'trace_id' => (string) Str::uuid(),
                 'tenant_id'              => $tenantId,
                 'agent_id'               => $agentId,
                 'action_type'            => $actionTypes[array_rand($actionTypes)],
@@ -197,6 +198,7 @@ class GoldStandardAgentSeeder extends Seeder
         $hitlTypes = ['hitl_pending', 'hitl_approved', 'hitl_approved', 'hitl_rejected', 'hitl_timeout'];
         foreach ($hitlTypes as $idx => $type) {
             DB::table('action_ledger')->insert([
+                'trace_id' => (string) Str::uuid(),
                 'tenant_id'              => $tenantId,
                 'agent_id'               => $agentId,
                 'action_type'            => $type,
@@ -210,6 +212,7 @@ class GoldStandardAgentSeeder extends Seeder
 
         // Add a canary event
         DB::table('action_ledger')->insert([
+            'trace_id' => (string) Str::uuid(),
             'tenant_id'              => $tenantId,
             'agent_id'               => $agentId,
             'action_type'            => 'canary_issued',
@@ -222,6 +225,7 @@ class GoldStandardAgentSeeder extends Seeder
 
         // Add a certification event
         DB::table('action_ledger')->insert([
+            'trace_id' => (string) Str::uuid(),
             'tenant_id'              => $tenantId,
             'agent_id'               => $agentId,
             'action_type'            => 'agent_certified',
