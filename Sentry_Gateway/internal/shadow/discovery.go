@@ -1,4 +1,4 @@
-// © 2026 Affinity Ops Ltd. All rights reserved.
+// © 2026 Affinity Ops Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Package shadow implements Shadow AI discovery by integrating with external

@@ -1,4 +1,4 @@
-// © 2026 Affinity Ops Ltd. All rights reserved.
+// © 2026 Affinity Ops Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';

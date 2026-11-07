@@ -1,4 +1,4 @@
-// © 2026 Affinity Ops Ltd. All rights reserved.
+// © 2026 Affinity Ops Ltd.
 // SPDX-License-Identifier: Apache-2.0
 //
 // ML-DSA-65 (FIPS 204) Post-Quantum Digital Signature Service.

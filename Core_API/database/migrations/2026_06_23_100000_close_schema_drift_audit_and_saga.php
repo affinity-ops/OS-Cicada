@@ -1,6 +1,6 @@
 <?php
 /**
- * © 2026 Affinity Ops Ltd. All rights reserved.
+ * © 2026 Affinity Ops Ltd.
  * SPDX-License-Identifier: Apache-2.0
  *
  * Closes schema drift between cicada_ledger (production) and cicada_test.

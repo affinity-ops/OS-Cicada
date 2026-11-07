@@ -1,4 +1,4 @@
-// © 2026 Affinity Ops Ltd. All rights reserved.
+// © 2026 Affinity Ops Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Package analyzer — test suite for the Shadow Sandbox anomaly scoring engine.

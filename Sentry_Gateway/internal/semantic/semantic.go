@@ -1,4 +1,4 @@
-// © 2026 Affinity Ops Ltd. All rights reserved.
+// © 2026 Affinity Ops Ltd.
 // Proprietary and confidential. Unauthorized copying or distribution prohibited.
 
 // Package semantic implements intent alignment checking for Cicada's proxy layer.

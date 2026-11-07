@@ -212,4 +212,4 @@ Cicada's architecture is designed for deployment as a **governance sidecar** —
 
 ---
 
-*Matthews Enforcement Framework © 2026 Affinity Ops Ltd. All rights reserved.*
+*Matthews Enforcement Framework © 2026 Affinity Ops Ltd.*

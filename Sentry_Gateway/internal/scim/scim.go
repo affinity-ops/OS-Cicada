@@ -1,4 +1,4 @@
-// © 2026 Affinity Ops Ltd. All rights reserved.
+// © 2026 Affinity Ops Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Package scim implements SCIM 2.0 provisioning endpoints (S6.4).
