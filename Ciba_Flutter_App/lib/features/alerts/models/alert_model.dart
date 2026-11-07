@@ -24,6 +24,7 @@ class HitlAlert {
   final List<DeclaredTool> declaredTools;
   final QuorumStatus? quorum;
   final String? reasoningTraceUrl;
+  final String payloadHash;
 
   HitlAlert({
     required this.holdRef,
@@ -44,6 +45,7 @@ class HitlAlert {
     this.declaredTools = const [],
     this.quorum,
     this.reasoningTraceUrl,
+    this.payloadHash = '',
   });
 
   factory HitlAlert.fromJson(Map<String, dynamic> json) {
@@ -69,6 +71,7 @@ class HitlAlert {
           [],
       quorum: json['quorum'] != null ? QuorumStatus.fromJson(json['quorum']) : null,
       reasoningTraceUrl: json['reasoning_trace_url'],
+      payloadHash: (json['hold_payload_hash'] ?? json['payload_hash'] ?? '').toString(),
     );
   }
 

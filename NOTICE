@@ -1,28 +1,28 @@
 Cicada: Zero-Trust Runtime Enforcement Gateway & Matthews Enforcement Framework (MEF)
-Copyright 2026 Patrick Matthews & Affinity Ops Ltd. All rights reserved.
+Copyright 2026 Patrick Matthews and Affinity Ops Ltd.
 
-MANDATORY ATTRIBUTION NOTICE (Pursuant to Apache License 2.0, Section 4(c) and Section 4(d)):
-This product includes software, architectural specifications, and security enforcement
-models conceived, designed, and developed by:
+This product includes software, architectural specifications, and runtime
+enforcement models originally conceived, architected, and developed by:
 
-  Original Creator, Systems Architect & Inventor: Patrick Matthews
-  Organization: Affinity Ops Ltd.
-  Repository: https://github.com/affinity-ops/OS-Cicada
+  Original Creator & Systems Architect: Patrick Matthews (Affinity Ops Ltd.)
+  Source Repository: https://github.com/affinity-ops/OS-Cicada
 
-Any reproduction, clone, fork, modification, redistribution, or Derivative Work
-(whether in Source or Object form, standalone or embedded within another product or
-service) MUST retain this NOTICE file in full and MUST prominently display the following
-attribution in all associated documentation, README files, user interfaces, or
-distribution materials:
+Pursuant to Section 4(c) and Section 4(d) of the Apache License, Version 2.0,
+any redistribution of this Work or any Derivative Works thereof must retain
+this attribution notice within the distributed NOTICE file, documentation, or
+other locations where third-party notices normally appear:
 
-  "Built upon the Cicada Zero-Trust Agent Gateway and the Matthews Enforcement
+  "Includes the Cicada Zero-Trust Agent Gateway and the Matthews Enforcement
    Framework (MEF), originally architected and developed by Patrick Matthews
    (Affinity Ops Ltd.)."
 
-Academic, Research & Prior-Art Citation Requirement:
+Academic & Prior-Art Reference (Informational):
   Matthews, P. (2026). The Matthews Enforcement Framework (MEF): A Deterministic
   Mathematical Model for Zero-Trust Autonomous Agent Governance.
   - Zenodo DOI: https://doi.org/10.5281/zenodo.19597120
   - SSRN ID: https://papers.ssrn.com/sol3/papers.cfm?abstract_id=6612798
   - Technical Specification: /docs/MATTHEWS_ENFORCEMENT_FRAMEWORK.md
 
+In accordance with Section 4(d) of the Apache License, Version 2.0, the contents
+of this NOTICE file are for informational attribution purposes and do not modify
+the terms of the Apache License, Version 2.0.

@@ -5,7 +5,7 @@
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
-PHP="/Users/patrickmatthews/Library/Application Support/Herd/bin/php"
+PHP="${PHP_BIN:-$(command -v php 2>/dev/null || echo "/Users/patrickmatthews/Library/Application Support/Herd/bin/php")}"
 LOGS="$SCRIPT_DIR/logs"
 PIDS="$SCRIPT_DIR/.fleet_pids"
 
@@ -112,8 +112,8 @@ wait_for_http() {
     echo -n "."
     sleep 2
   done
-  echo " ✗ (timeout after ${retries}s — check logs)"
-  return 0  # Don't abort fleet for a slow service; just warn.
+  echo " ✗ FATAL: readiness check timed out for $label ($url) after $((retries * 2))s — check $LOGS/"
+  exit 1
 }
 
 start_service() {

@@ -224,13 +224,19 @@ func main() {
 
 	// ── Phase 4: OPA Policy Engine ──
 	// Fail-Closed architecture: If DB is unreachable in production, we log.Fatal natively to refuse launch.
-	// In standalone simulation mode (store.DB == nil), compile the embedded defaultPolicy.
+	// When no custom policy row exists yet in opa_policies ("no rows in result set"),
+	// policy.NewEngine compiles the embedded fail-closed defaultPolicy.
 	var activeRego string
 	if store.DB != nil {
 		var err error
 		activeRego, err = policystore.GetActivePolicy(ctx, store.DB, "authz.rego")
 		if err != nil {
-			log.Fatalf("[FATAL] OPA policy store fetch failed: %v", err)
+			if strings.Contains(err.Error(), "no rows in result set") {
+				log.Printf("[POLICY] No active custom policy in opa_policies for authz.rego — booting with embedded fail-closed defaultPolicy")
+				activeRego = ""
+			} else {
+				log.Fatalf("[FATAL] OPA policy store fetch failed: %v", err)
+			}
 		}
 	}
 	var err error
@@ -2657,24 +2663,19 @@ func handleAgentRequest(w http.ResponseWriter, r *http.Request) {
 	// If the agent's policy requests EAKF but the plugin is unavailable,
 	// the request is blocked immediately (fail-closed intent, §7.6C).
 	if pluginMgr != nil {
-		eakfReq := pipeline.Request{
-			AgentID:   agentID,
-			TenantID:  tenantID,
-			TargetURL: targetURL,
-			Body:      string(bodyBytes),
-		}
+		// Enforce EAKF sandboxing strictly from the server-side agent/tool manifest
+		// (destructive_capability, tool scope "execute", or code execution target endpoint),
+		// NEVER from the untrusted client request body.
+		serverRequiresEAKF := (agentCacheErr == nil && agentCached.DestructiveCapability) ||
+			scopeMap[resolvedToolID] == "execute" ||
+			strings.HasSuffix(targetURL, "/v1/tools/execute_code")
 
-		// Check if the request body declares eakf_enabled OR if the server-side
-		// agent manifest declares destructive_capability / EAKF URL filter match.
-		var eakfIntent struct {
-			EAKFEnabled bool `json:"eakf_enabled"`
-		}
-		_ = json.Unmarshal(bodyBytes, &eakfIntent)
-		serverRequiresEAKF := eakfIntent.EAKFEnabled
-		if !serverRequiresEAKF && agentCacheErr == nil && agentCached.DestructiveCapability {
-			if interceptor, err := pluginMgr.GetInterceptor("eakf"); err == nil && interceptor.EventFilter(eakfReq) {
-				serverRequiresEAKF = true
-			}
+		eakfReq := pipeline.Request{
+			AgentID:     agentID,
+			TenantID:    tenantID,
+			TargetURL:   targetURL,
+			Body:        string(bodyBytes),
+			EAKFEnabled: serverRequiresEAKF,
 		}
 
 		if serverRequiresEAKF {
@@ -3862,16 +3863,82 @@ func handleLLMProxy(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// ── Quarantine check ──────────────────────────────────────────────────────
-	if gossipMesh.IsQuarantined(agentID) || gossipMesh.IsQuarantined(fmt.Sprintf("%s_WILDCARD", tenantID)) {
+	if gossipMesh != nil && (gossipMesh.IsQuarantined(agentID) || gossipMesh.IsQuarantined(fmt.Sprintf("%s_WILDCARD", tenantID))) {
 		writeError(w, `{"error":"agent or tenant quarantined"}`, http.StatusForbidden)
 		return
+	}
+
+	// ── Tier-1 SSRF & Cloud Metadata Guard ────────────────────────────────────
+	if err := ssrf.ValidateOutboundURL(targetURL, nil); err != nil {
+		if !strings.Contains(err.Error(), "DNS resolution failed") {
+			writeError(w, fmt.Sprintf(`{"error":"ssrf_blocked","message":%q}`, err.Error()), http.StatusForbidden)
+			return
+		}
+	}
+
+	// ── Canary Honeytoken Exfiltration Trap ───────────────────────────────────
+	if len(bodyBytes) > 0 {
+		bodyStr := string(bodyBytes)
+		if trigger := canary.CheckOutbound(r.Context(), tenantID, bodyStr); trigger != nil {
+			if gossipMesh != nil {
+				gossipMesh.QuarantineAgent(agentID)
+			}
+			writeError(w, `{"error":"canary_honeytoken_triggered"}`, http.StatusForbidden)
+			return
+		} else if found, _ := canary.ContainsCanaryToken(bodyStr); found {
+			if gossipMesh != nil {
+				gossipMesh.QuarantineAgent(agentID)
+			}
+			writeError(w, `{"error":"canary_honeytoken_triggered"}`, http.StatusForbidden)
+			return
+		}
 	}
 
 	if r.Header.Get("X-Cicada-Memory-Action") == "flush" {
 		taint.ClearTaint(r.Context(), agentID)
 	}
-	if llmProv := r.Header.Get("X-Cicada-Content-Provenance"); taint.IsUntrustedProvenance(llmProv) {
+	llmProv := r.Header.Get("X-Cicada-Content-Provenance")
+	if taint.IsUntrustedProvenance(llmProv) {
 		taint.MarkTainted(r.Context(), agentID, "llm_proxy:provenance:"+llmProv, "LLM context ingested untrusted provenance")
+	}
+
+	// ── Unified 9-Layer Admission Pipeline & Manifest Enforcement ─────────────
+	llmTools, llmToolsErr := agentcache.GetTools(r.Context(), agentID)
+	llmResolvedTool, llmPrereqMap, llmScopeMap := agentcache.ResolveToolForRequest(
+		llmTools,
+		r.Header.Get("X-Cicada-Tool-ID"),
+		targetURL,
+		r.Method,
+	)
+	if llmToolsErr != nil && store.DB != nil && os.Getenv("CICADA_FAIL_CLOSED") != "false" {
+		llmPrereqMap = map[string]string{"__manifest_unavailable__": "__lookup_failed__"}
+		llmResolvedTool = ""
+	}
+	llmPipeRes := pipeline.Evaluate(r.Context(), pipeline.Request{
+		AgentID:         agentID,
+		TenantID:        tenantID,
+		HTTPMethod:      r.Method,
+		TargetURL:       targetURL,
+		Body:            string(bodyBytes),
+		Provenance:      llmProv,
+		ToolID:          llmResolvedTool,
+		PrerequisiteMap: llmPrereqMap,
+		LedgerCheckFn: func(reqTool string) bool {
+			if reqTool == "__lookup_failed__" {
+				return false
+			}
+			done, _ := prerequisite.HasCompletedPrerequisite(r.Context(), agentID, reqTool)
+			return done
+		},
+		ToolScopeMap: llmScopeMap,
+	})
+	if !llmPipeRes.Admitted {
+		if llmPipeRes.BlockedBy == "injection_scan" {
+			w.Header().Set("X-Cicada-Memory-Action", "flush")
+			w.Header().Set("X-Cicada-Flush-Reason", "prompt_injection_detected")
+		}
+		writeError(w, fmt.Sprintf(`{"error":%q,"reason":%q}`, llmPipeRes.BlockedBy, llmPipeRes.BlockReason), http.StatusForbidden)
+		return
 	}
 
 	// ── Detect provider and extract context window ────────────────────────────
@@ -3940,17 +4007,19 @@ func handleLLMProxy(w http.ResponseWriter, r *http.Request) {
 			// Non-blocking: log to ledger and continue. We do not block the call —
 			// contamination is an observation for Aegis-0 to investigate; blocking
 			// would tip off the attacker that they were detected.
-			edgeLedger.AppendRecord(ledger.EventRecord{
-		HumanContext: "",
-				EventID:            fmt.Sprintf("evt-%d", time.Now().UnixNano()),
-				TraceID:            traceID, TenantID: tenantID, AgentID: agentID,
-				ActionClass:        "llm_proxy",
-				Decision:           "contamination_detected",
-				ReasonCodes:        []string{"cross_agent_context_contamination", "source_agent:" + contaminatedBy},
-				RiskScore:          0.90,
-				ContextFingerprint: fingerprint,
-				Model:              llmModel,
-			})
+			if edgeLedger != nil {
+				edgeLedger.AppendRecord(ledger.EventRecord{
+					HumanContext:       "",
+					EventID:            fmt.Sprintf("evt-%d", time.Now().UnixNano()),
+					TraceID:            traceID, TenantID: tenantID, AgentID: agentID,
+					ActionClass:        "llm_proxy",
+					Decision:           "contamination_detected",
+					ReasonCodes:        []string{"cross_agent_context_contamination", "source_agent:" + contaminatedBy},
+					RiskScore:          0.90,
+					ContextFingerprint: fingerprint,
+					Model:              llmModel,
+				})
+			}
 		}
 
 		// ── Phase 8: Semantic contamination check ─────────────────────────────
@@ -3984,17 +4053,19 @@ func handleLLMProxy(w http.ResponseWriter, r *http.Request) {
 						agentID, simScore, semSource, traceID,
 					)
 					taint.MarkTainted(r.Context(), agentID, "semantic_cross_agent:"+semSource, "semantic cross-agent memory contamination detected")
-					edgeLedger.AppendRecord(ledger.EventRecord{
-		HumanContext: "",
-						EventID:            fmt.Sprintf("evt-%d", time.Now().UnixNano()),
-						TraceID:            traceID, TenantID: tenantID, AgentID: agentID,
-						ActionClass:        "llm_proxy",
-						Decision:           "contamination_detected",
-						ReasonCodes:        []string{"cross_agent_semantic_contamination", "source_agent:" + semSource, fmt.Sprintf("sim_score:%.3f", simScore)},
-						RiskScore:          simScore,
-						ContextFingerprint: fingerprint,
-						Model:              llmModel,
-					})
+					if edgeLedger != nil {
+						edgeLedger.AppendRecord(ledger.EventRecord{
+							HumanContext:       "",
+							EventID:            fmt.Sprintf("evt-%d", time.Now().UnixNano()),
+							TraceID:            traceID, TenantID: tenantID, AgentID: agentID,
+							ActionClass:        "llm_proxy",
+							Decision:           "contamination_detected",
+							ReasonCodes:        []string{"cross_agent_semantic_contamination", "source_agent:" + semSource, fmt.Sprintf("sim_score:%.3f", simScore)},
+							RiskScore:          simScore,
+							ContextFingerprint: fingerprint,
+							Model:              llmModel,
+						})
+					}
 					break // one semantic match per request is sufficient to alert
 				}
 			}
@@ -4009,17 +4080,19 @@ func handleLLMProxy(w http.ResponseWriter, r *http.Request) {
 	// ── Ghost mode: return plausible fake LLM response ────────────────────────
 	if ghostmode.IsActive(r.Context(), agentID) {
 		log.Printf("[GHOST] Agent %s LLM call intercepted — returning ghost response", agentID)
-		edgeLedger.AppendRecord(ledger.EventRecord{
-		HumanContext: "",
-			EventID:            fmt.Sprintf("evt-%d", time.Now().UnixNano()),
-			TraceID:            traceID, TenantID: tenantID, AgentID: agentID,
-			ActionClass:        "llm_proxy",
-			Decision:           "ghost_proxied",
-			ReasonCodes:        []string{"ghost_mode_active"},
-			RiskScore:          0.3,
-			ContextFingerprint: fingerprint,
-			Model:              llmModel,
-		})
+		if edgeLedger != nil {
+			edgeLedger.AppendRecord(ledger.EventRecord{
+				HumanContext:       "",
+				EventID:            fmt.Sprintf("evt-%d", time.Now().UnixNano()),
+				TraceID:            traceID, TenantID: tenantID, AgentID: agentID,
+				ActionClass:        "llm_proxy",
+				Decision:           "ghost_proxied",
+				ReasonCodes:        []string{"ghost_mode_active"},
+				RiskScore:          0.3,
+				ContextFingerprint: fingerprint,
+				Model:              llmModel,
+			})
+		}
 		handleGhostLLMResponse(w, provider)
 		return
 	}
@@ -4027,23 +4100,27 @@ func handleLLMProxy(w http.ResponseWriter, r *http.Request) {
 	// ── Dry-Run Intercept ─────────────────────────────────────────────────────
 	if r.Header.Get("X-Cicada-Dry-Run") == "true" {
 		log.Printf("[DRY-RUN] LLM Request passed all policies. Intercepting before upstream: agent %s trace %s", agentID, traceID)
-		edgeLedger.AppendRecord(ledger.EventRecord{
-			HumanContext:       "",
-			EventID:            fmt.Sprintf("evt-%d", time.Now().UnixNano()),
-			TraceID:            traceID, TenantID: tenantID, AgentID: agentID,
-			ActionClass:        "llm_proxy",
-			Decision:           "dry_run_passed",
-			ReasonCodes:        []string{"policy_passed_simulated"},
-			RiskScore:          0.0,
-			ContextFingerprint: fingerprint,
-			Model:              llmModel,
-		})
+		if edgeLedger != nil {
+			edgeLedger.AppendRecord(ledger.EventRecord{
+				HumanContext:       "",
+				EventID:            fmt.Sprintf("evt-%d", time.Now().UnixNano()),
+				TraceID:            traceID, TenantID: tenantID, AgentID: agentID,
+				ActionClass:        "llm_proxy",
+				Decision:           "dry_run_passed",
+				ReasonCodes:        []string{"policy_passed_simulated"},
+				RiskScore:          0.0,
+				ContextFingerprint: fingerprint,
+				Model:              llmModel,
+			})
+		}
 		handleGhostLLMResponse(w, provider)
 		return
 	}
 
 	// ── Billing meter ─────────────────────────────────────────────────────────
-	sentryMeter.Increment(tenantID)
+	if sentryMeter != nil {
+		sentryMeter.Increment(tenantID)
+	}
 
 	// ── Forward to real LLM provider ─────────────────────────────────────────
 	// Strip all Cicada-specific headers from the outbound request. Inject the
@@ -4104,18 +4181,20 @@ func handleLLMProxy(w http.ResponseWriter, r *http.Request) {
 
 	if isStreaming {
 		// Log what we know from the request side — no reasoning trace available
-		edgeLedger.AppendRecord(ledger.EventRecord{
-		HumanContext: "",
-			EventID:            fmt.Sprintf("evt-%d", time.Now().UnixNano()),
-			TraceID:            traceID, TenantID: tenantID, AgentID: agentID,
-			ActionClass:        "llm_proxy",
-			Decision:           "allow",
-			PolicyVersion:      "v1.4.2",
-			ReasonCodes:        []string{"llm_audit_streaming", "provider:" + llmproxy.ProviderName(provider)},
-			RiskScore:          0.1,
-			ContextFingerprint: fingerprint,
-			Model:              llmModel,
-		})
+		if edgeLedger != nil {
+			edgeLedger.AppendRecord(ledger.EventRecord{
+				HumanContext:       "",
+				EventID:            fmt.Sprintf("evt-%d", time.Now().UnixNano()),
+				TraceID:            traceID, TenantID: tenantID, AgentID: agentID,
+				ActionClass:        "llm_proxy",
+				Decision:           "allow",
+				PolicyVersion:      "v1.4.2",
+				ReasonCodes:        []string{"llm_audit_streaming", "provider:" + llmproxy.ProviderName(provider)},
+				RiskScore:          0.1,
+				ContextFingerprint: fingerprint,
+				Model:              llmModel,
+			})
+		}
 		w.WriteHeader(resp.StatusCode)
 		// Stream directly — io.Copy flushes as data arrives
 		flusher, canFlush := w.(http.Flusher)
@@ -4150,19 +4229,21 @@ func handleLLMProxy(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// ── Ledger write — full LLM audit record ──────────────────────────────────
-	edgeLedger.AppendRecord(ledger.EventRecord{
-		HumanContext: "",
-		EventID:            fmt.Sprintf("evt-%d", time.Now().UnixNano()),
-		TraceID:            traceID, TenantID: tenantID, AgentID: agentID,
-		ActionClass:        "llm_proxy",
-		Decision:           "allow",
-		PolicyVersion:      "v1.4.2",
-		ReasonCodes:        []string{"llm_audit_complete", "provider:" + llmproxy.ProviderName(provider)},
-		RiskScore:          0.1,
-		ContextFingerprint: fingerprint,
-		ReasoningTrace:     reasoningTrace,
-		Model:              llmModel,
-	})
+	if edgeLedger != nil {
+		edgeLedger.AppendRecord(ledger.EventRecord{
+			HumanContext:       "",
+			EventID:            fmt.Sprintf("evt-%d", time.Now().UnixNano()),
+			TraceID:            traceID, TenantID: tenantID, AgentID: agentID,
+			ActionClass:        "llm_proxy",
+			Decision:           "allow",
+			PolicyVersion:      "v1.4.2",
+			ReasonCodes:        []string{"llm_audit_complete", "provider:" + llmproxy.ProviderName(provider)},
+			RiskScore:          0.1,
+			ContextFingerprint: fingerprint,
+			ReasoningTrace:     reasoningTrace,
+			Model:              llmModel,
+		})
+	}
 
 	w.WriteHeader(resp.StatusCode)
 	w.Write(respBody)

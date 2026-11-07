@@ -1,0 +1,70 @@
+# © 2026 Affinity Ops Ltd.
+# SPDX-License-Identifier: Apache-2.0
+#
+# Mandatory Kubernetes NetworkPolicy manifests for Cicada EAKF (`eakfd`)
+# and managed autonomous agent workloads:
+#   1. `eakfd-default-deny-all`: Denies all TCP/UDP ingress and egress for
+#      the Ephemeral Agent Kernel Firewall (`eakfd`) pods. Communication
+#      between `sentry-gateway` and `eakfd` occurs exclusively over a shared
+#      UNIX Domain Socket volume (`/var/run/cicada/eakf.sock`).
+#   2. `cicada-agent-egress-lockdown`: Prevents managed autonomous agent pods
+#      from bypassing `sentry-gateway` by blocking all direct internet egress
+#      and permitting traffic only to `sentry-gateway:8080` and cluster DNS.
+
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: eakfd-default-deny-all
+  namespace: cicada-system
+  labels:
+    app.kubernetes.io/part-of: cicada
+    app.kubernetes.io/component: eakfd
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/component: eakfd
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress: []
+  egress: []
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: cicada-agent-egress-lockdown
+  namespace: cicada-agents
+  labels:
+    app.kubernetes.io/part-of: cicada
+    app.kubernetes.io/component: agent-perimeter
+spec:
+  podSelector:
+    matchLabels:
+      cicada.io/managed-agent: "true"
+  policyTypes:
+    - Egress
+  egress:
+    # 1. Permit outbound traffic ONLY to the Cicada Sentry Gateway proxy (:8080)
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: cicada-system
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/component: sentry-gateway
+      ports:
+        - protocol: TCP
+          port: 8080
+    # 2. Permit internal cluster DNS resolution (kube-dns / CoreDNS)
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53

@@ -11,6 +11,7 @@ import (
 	"crypto/ed25519"
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -129,7 +130,8 @@ func HandleHeartbeat(w http.ResponseWriter, r *http.Request) {
 		rows, err := DB.Query(ctx,
 			`SELECT hp.hold_ref, car.agent_name, car.action_summary,
 			        car.target_url, car.risk_score, car.risk_reason,
-			        car.payload_preview, car.expires_at, car.created_at
+			        car.payload_preview, car.expires_at, car.created_at,
+			        COALESCE(car.hold_payload_hash, encode(digest(hp.ciphertext, 'sha256'), 'hex'), '')
 			 FROM hold_payloads hp
 			 JOIN ciba_authorization_requests car ON car.trace_id = hp.hold_ref
 			 WHERE hp.target_device = $1
@@ -142,25 +144,27 @@ func HandleHeartbeat(w http.ResponseWriter, r *http.Request) {
 		if err == nil {
 			defer rows.Close()
 			for rows.Next() {
-				var holdRef, agentName, actionSummary string
+				var holdRef, agentName, actionSummary, holdPayloadHash string
 				var targetURL, riskReason, payloadPreview *string
 				var riskScore float64
 				var expiresAt, createdAt time.Time
 				if err := rows.Scan(&holdRef, &agentName, &actionSummary,
 					&targetURL, &riskScore, &riskReason,
-					&payloadPreview, &expiresAt, &createdAt); err != nil {
+					&payloadPreview, &expiresAt, &createdAt, &holdPayloadHash); err != nil {
 					continue
 				}
 				alert := map[string]any{
-					"hold_ref":       holdRef,
-					"agent_name":     agentName,
-					"action_detail":  actionSummary,
-					"action_type":    "hitl/hold",
-					"trust_score":    1.0 - riskScore,
-					"severity":       "critical",
-					"velocity":       "HIGH",
-					"expires_at":     expiresAt.Format(time.RFC3339),
-					"created_at":     createdAt.Format(time.RFC3339),
+					"hold_ref":          holdRef,
+					"agent_name":        agentName,
+					"action_detail":     actionSummary,
+					"action_type":       "hitl/hold",
+					"trust_score":       1.0 - riskScore,
+					"severity":          "critical",
+					"velocity":          "HIGH",
+					"expires_at":        expiresAt.Format(time.RFC3339),
+					"created_at":        createdAt.Format(time.RFC3339),
+					"hold_payload_hash": holdPayloadHash,
+					"payload_hash":      holdPayloadHash,
 				}
 				if targetURL != nil {
 					alert["action_target"] = *targetURL
@@ -368,9 +372,17 @@ func HandleBatchDecisions(w http.ResponseWriter, r *http.Request) {
 		}
 
 		// ── Step 2: Verify Ed25519 signature BEFORE touching nonce ────────
-		// The signing payload is: hold_ref|decision|decision_nonce|gateway_timestamp|hold_payload_hash
-		// This MUST match what the app signs in DecisionService.signDecision().
-		signingPayload := d.HoldRef + "|" + d.Decision + "|" + d.DecisionNonce + "|" + d.GatewayTimestamp + "|" + d.HoldPayloadHash
+		// Canonical length-prefixed signing payload:
+		//   <len>:hold_ref\n<len>:decision\n<len>:decision_nonce\n<len>:gateway_timestamp\n<len>:hold_payload_hash
+		signingPayload := fmt.Sprintf(
+			"%d:%s\n%d:%s\n%d:%s\n%d:%s\n%d:%s",
+			len(d.HoldRef), d.HoldRef,
+			len(d.Decision), d.Decision,
+			len(d.DecisionNonce), d.DecisionNonce,
+			len(d.GatewayTimestamp), d.GatewayTimestamp,
+			len(d.HoldPayloadHash), d.HoldPayloadHash,
+		)
+		legacySigningPayload := d.HoldRef + "|" + d.Decision + "|" + d.DecisionNonce + "|" + d.GatewayTimestamp + "|" + d.HoldPayloadHash
 		pubKeyBytes, err := base64.StdEncoding.DecodeString(d.Ed25519Pub)
 		if err != nil || len(pubKeyBytes) != ed25519.PublicKeySize {
 			result["error"] = "invalid ed25519_pub encoding"
@@ -383,13 +395,20 @@ func HandleBatchDecisions(w http.ResponseWriter, r *http.Request) {
 			results = append(results, result)
 			continue
 		}
+		verifiedSigPayload := signingPayload
 		if !ed25519.Verify(ed25519.PublicKey(pubKeyBytes), []byte(signingPayload), sigBytes) {
-			log.Printf("[MOBILE] Signature verification FAILED: hold=%s device=%s...%s",
-				d.HoldRef, d.Ed25519Pub[:8], d.Ed25519Pub[len(d.Ed25519Pub)-4:])
-			result["error"] = "Ed25519 signature verification failed"
-			results = append(results, result)
-			continue
+			if os.Getenv("CICADA_ALLOW_LEGACY_DECISION_SIG") == "true" &&
+				ed25519.Verify(ed25519.PublicKey(pubKeyBytes), []byte(legacySigningPayload), sigBytes) {
+				verifiedSigPayload = legacySigningPayload
+			} else {
+				log.Printf("[MOBILE] Signature verification FAILED: hold=%s device=%s...%s",
+					d.HoldRef, d.Ed25519Pub[:8], d.Ed25519Pub[len(d.Ed25519Pub)-4:])
+				result["error"] = "Ed25519 signature verification failed"
+				results = append(results, result)
+				continue
+			}
 		}
+		signingPayload = verifiedSigPayload
 
 		// ── Step 2b: Verify ML-DSA-65 PQC signature (hybrid verification) ─
 		// When CICADA_ENFORCE_PQC is true, BOTH classical (Ed25519) and

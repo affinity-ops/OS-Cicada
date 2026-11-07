@@ -56,11 +56,11 @@ func (c *EAKFClient) Name() string {
 //
 // Returns true when BOTH conditions are met:
 //   1. The request targets the code execution endpoint (POST /v1/tools/execute_code).
-//   2. The agent's policy manifest declares eakf_enabled: true.
+//   2. The server-side agent/tool manifest requires EAKF sandboxing (req.EAKFEnabled).
 //
-// The OPA pre-check at Layer 4e determines sandbox escalation before
-// EventFilter is called — EventFilter is the plugin's own secondary
-// confirmation, not a replacement for OPA.
+// Security invariant: EAKF sandboxing is strictly enforced from the server-side
+// manifest (req.EAKFEnabled) and NEVER controlled by the untrusted request body,
+// preventing an agent from setting {"eakf_enabled": false} to bypass the sandbox.
 //
 // Source: §3.1, line 80 and §4, lines 119–121.
 func (c *EAKFClient) EventFilter(req pipeline.Request) bool {
@@ -69,21 +69,8 @@ func (c *EAKFClient) EventFilter(req pipeline.Request) bool {
 		return false
 	}
 
-	// Condition 2: agent policy requests sandboxed execution.
-	// The agent's body may carry the policy manifest inline for tool
-	// execution requests. Parse and check for eakf_enabled flag.
-	if req.Body == "" {
-		return false
-	}
-
-	var manifest struct {
-		EAKFEnabled bool `json:"eakf_enabled"`
-	}
-	if err := json.Unmarshal([]byte(req.Body), &manifest); err != nil {
-		return false
-	}
-
-	return manifest.EAKFEnabled
+	// Condition 2: server-side manifest mandates sandboxed execution.
+	return req.EAKFEnabled
 }
 
 // Intercept delegates the code execution request to eakfd over gRPC,

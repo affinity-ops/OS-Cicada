@@ -83,6 +83,11 @@ type Request struct {
 	// TxProfile is the agent's historical multivariate transaction profile
 	// (loaded from Redis in production; cold-start safe when empty).
 	TxProfile txprofile.AgentProfile
+
+	// EAKFEnabled indicates whether the server-side agent or tool manifest
+	// mandates Ephemeral Agent Kernel Firewall (eakfd) sandboxing.
+	// Never populated from the untrusted client request body.
+	EAKFEnabled bool
 }
 
 // LayerResult captures one layer's decision and reason.

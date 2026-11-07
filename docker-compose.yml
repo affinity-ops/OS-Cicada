@@ -85,6 +85,7 @@ services:
       context: ./Sentry_Gateway
       dockerfile: Dockerfile.eakfd
     # runtime: runsc                      # Uncomment on Linux hosts with gVisor (runsc) installed
+    network_mode: "none"                  # Default-deny all network egress/ingress (IPC is UDS-only)
     restart: unless-stopped
     environment:
       EAKF_SOCKET_PATH: /var/run/cicada/eakf.sock

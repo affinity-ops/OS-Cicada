@@ -180,40 +180,35 @@ func TestHealthRecovery(t *testing.T) {
 func TestEAKFEventFilter_Match(t *testing.T) {
 	client := &EAKFClient{}
 
-	// Should match: correct endpoint + eakf_enabled.
+	// Should match: correct endpoint + server-side manifest EAKFEnabled=true,
+	// even if the agent attempts to set {"eakf_enabled": false} in its request body.
 	matchReq := pipeline.Request{
-		TargetURL: "https://api.example.com/v1/tools/execute_code",
-		Body:      `{"eakf_enabled": true, "payload": "print('hello')"}`,
+		TargetURL:   "https://api.example.com/v1/tools/execute_code",
+		Body:        `{"eakf_enabled": false, "payload": "print('hello')"}`,
+		EAKFEnabled: true,
 	}
 	if !client.EventFilter(matchReq) {
-		t.Error("expected EventFilter=true for matching request")
+		t.Error("expected EventFilter=true when server-side EAKFEnabled=true regardless of request body")
 	}
 
 	// Should not match: wrong endpoint.
 	noMatchReq := pipeline.Request{
-		TargetURL: "https://api.example.com/v1/agents/list",
-		Body:      `{"eakf_enabled": true}`,
+		TargetURL:   "https://api.example.com/v1/agents/list",
+		Body:        `{"payload": "print('hello')"}`,
+		EAKFEnabled: true,
 	}
 	if client.EventFilter(noMatchReq) {
 		t.Error("expected EventFilter=false for non-execution endpoint")
 	}
 
-	// Should not match: eakf not enabled.
+	// Should not match: server-side manifest does not enable EAKF.
 	disabledReq := pipeline.Request{
-		TargetURL: "https://api.example.com/v1/tools/execute_code",
-		Body:      `{"eakf_enabled": false}`,
+		TargetURL:   "https://api.example.com/v1/tools/execute_code",
+		Body:        `{"eakf_enabled": true}`,
+		EAKFEnabled: false,
 	}
 	if client.EventFilter(disabledReq) {
-		t.Error("expected EventFilter=false when eakf_enabled is false")
-	}
-
-	// Should not match: empty body.
-	emptyBodyReq := pipeline.Request{
-		TargetURL: "https://api.example.com/v1/tools/execute_code",
-		Body:      "",
-	}
-	if client.EventFilter(emptyBodyReq) {
-		t.Error("expected EventFilter=false for empty body")
+		t.Error("expected EventFilter=false when server-side EAKFEnabled is false")
 	}
 }
 

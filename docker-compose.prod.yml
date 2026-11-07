@@ -93,6 +93,7 @@ services:
       context: ./Sentry_Gateway
       dockerfile: Dockerfile.eakfd
     runtime: runsc
+    network_mode: "none"
     restart: unless-stopped
     environment:
       EAKF_SOCKET_PATH: /var/run/cicada/eakf.sock

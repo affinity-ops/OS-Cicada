@@ -108,15 +108,19 @@ class DecisionBloc extends Cubit<DecisionState> {
 
       emit(DecisionProcessing('Signing decision...'));
 
-      // ── Build the signing payload ──────────────────────────────────────
+      // ── Build the length-prefixed signing payload ──────────────────────
       // Must match what the gateway verifies in HandleBatchDecisions:
-      // hold_ref|decision|decision_nonce|gateway_timestamp|hold_payload_hash
+      // <len>:hold_ref\n<len>:decision\n<len>:decision_nonce\n<len>:gateway_timestamp\n<len>:hold_payload_hash
       final nonce = DateTime.now().microsecondsSinceEpoch.toRadixString(36);
       final timestamp = DateTime.now().toUtc().toIso8601String();
-      final payloadHash = alert.holdRef; // Simplified; production uses SHA-256
+      final payloadHash = alert.payloadHash.isNotEmpty ? alert.payloadHash : alert.holdRef;
 
       final signingPayload =
-          '${alert.holdRef}|$decision|$nonce|$timestamp|$payloadHash';
+          '${alert.holdRef.length}:${alert.holdRef}\n'
+          '${decision.length}:$decision\n'
+          '${nonce.length}:$nonce\n'
+          '${timestamp.length}:$timestamp\n'
+          '${payloadHash.length}:$payloadHash';
 
       // ── Sign with Ed25519 (classical) ───────────────────────────────
       final signature = await ed25519Service.sign(signingPayload);
@@ -141,6 +145,7 @@ class DecisionBloc extends Cubit<DecisionState> {
         'decision_nonce': nonce,
         'gateway_timestamp': timestamp,
         'hold_payload_hash': payloadHash,
+        'payload_hash': payloadHash,
         'signature_ed25519': signature,
         // ML-DSA-65 PQC signature (empty string if liboqs unavailable)
         'signature_ml_dsa65': mlDsaSignature,

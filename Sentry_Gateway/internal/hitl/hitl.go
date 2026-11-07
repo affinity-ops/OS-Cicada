@@ -44,14 +44,44 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 )
 
 // PolicyRiskThreshold is the Tier 1 score above which the human webhook fires.
 // Scores are 0.0–1.0; below this value, the call is auto-approved by policy
 // pre-check. Above it, Tier 2 human review is triggered.
-// Configurable via HITL_POLICY_RISK_THRESHOLD env var.
+//
+// Deliberate Single-Signal Design & Shadow Measurement:
+// Individual heuristic signals (financial keyword +0.40, destructive path +0.30,
+// credential keyword +0.30, suspicious host +0.20) are intentionally weighted
+// below 0.60 so that routine single-signal writes (e.g., an ordinary payment
+// payload containing `"amount"`) do not trigger human approval fatigue. Two or
+// more compounding signals (>= 0.60) trigger Tier 2 human review immediately,
+// while single-signal anomalies with structural blast-radius, multivariate
+// transaction-profile, or CaMeL taint violations are escalated by Layers 7–9 of
+// the unified admission pipeline.
+//
+// To allow operators to measure single-signal escalation volume in production
+// before lowering the threshold, every single-signal write (0.30 <= score < 0.60)
+// is recorded in shadow-mode telemetry (ShadowWouldEscalate=true, counter
+// ShadowSingleSignalCount()). Operators who wish to enforce human review on
+// single-signal writes after shadow measurement can set:
+//   HITL_SINGLE_SIGNAL_MODE=enforce  (or HITL_POLICY_RISK_THRESHOLD=0.30)
 const defaultPolicyRiskThreshold = 0.60
+
+var (
+	tier1AutoApprovedCount  atomic.Int64
+	tier1ShadowSingleSignal atomic.Int64
+	tier2EscalatedCount     atomic.Int64
+)
+
+// ShadowStats returns point-in-time counters for Tier 1 auto-approvals,
+// shadow-mode single-signal detections (0.30 <= score < threshold), and
+// Tier 2 human escalations.
+func ShadowStats() (autoApproved, shadowSingleSignal, escalated int64) {
+	return tier1AutoApprovedCount.Load(), tier1ShadowSingleSignal.Load(), tier2EscalatedCount.Load()
+}
 
 // HumanApprovalTimeout is the maximum time the Gateway waits for a human to
 // respond in Tier 2. Configurable via HITL_APPROVAL_TIMEOUT_SECONDS env var.
@@ -81,11 +111,12 @@ type ApprovalResponse struct {
 
 // TieredCheckResult carries the approval outcome and which tier produced it.
 type TieredCheckResult struct {
-	Approved   bool
-	Tier       int    // 1 = auto-approved by policy, 2 = human decision
-	RiskScore  float64
-	RiskReason string
-	Err        error
+	Approved            bool
+	Tier                int     // 1 = auto-approved by policy, 2 = human decision
+	RiskScore           float64
+	RiskReason          string
+	ShadowWouldEscalate bool    // true when 0.30 <= RiskScore < threshold (measured in shadow mode)
+	Err                 error
 }
 
 // TieredCheck is the primary entry point. It runs Tier 1 policy pre-check first.
@@ -100,27 +131,44 @@ func TieredCheck(webhookURL, traceID, agentID, tenantID, targetAPI string, scope
 	riskScore, riskReason := policyPreCheck(scopes, targetAPI, payloadPreview)
 
 	threshold := policyRiskThreshold()
+	if strings.EqualFold(os.Getenv("HITL_SINGLE_SIGNAL_MODE"), "enforce") && threshold > 0.30 {
+		threshold = 0.30
+	}
 
 	if riskScore < threshold {
-		// Call fits the declared contract — auto-approve.
-		// Logged in the proxy handler as a Tier 1 HITL approval so it is visible
-		// in the audit trail even though no human was involved.
-		log.Printf("[HITL] Tier 1 auto-approved: agent=%s trace=%s score=%.2f reason=%q",
-			agentID, traceID, riskScore, riskReason)
-		return TieredCheckResult{Approved: true, Tier: 1, RiskScore: riskScore, RiskReason: riskReason}
+		tier1AutoApprovedCount.Add(1)
+		shadowFlag := false
+		if riskScore >= 0.30 {
+			shadowFlag = true
+			tier1ShadowSingleSignal.Add(1)
+			log.Printf("[HITL-SHADOW] Single-signal write auto-approved (shadow measurement: would_escalate_at_0.30=true): agent=%s trace=%s score=%.2f reason=%q",
+				agentID, traceID, riskScore, riskReason)
+		} else {
+			log.Printf("[HITL] Tier 1 auto-approved: agent=%s trace=%s score=%.2f reason=%q",
+				agentID, traceID, riskScore, riskReason)
+		}
+		return TieredCheckResult{
+			Approved:            true,
+			Tier:                1,
+			RiskScore:           riskScore,
+			RiskReason:          riskReason,
+			ShadowWouldEscalate: shadowFlag,
+		}
 	}
 
 	// ── Tier 2: Human webhook ─────────────────────────────────────────────────
+	tier2EscalatedCount.Add(1)
 	log.Printf("[HITL] Tier 1 escalating to human: agent=%s trace=%s score=%.2f reason=%q",
 		agentID, traceID, riskScore, riskReason)
 
 	approved, err := humanWebhook(webhookURL, traceID, agentID, tenantID, targetAPI, scopes, payloadPreview, riskScore, riskReason)
 	return TieredCheckResult{
-		Approved:   approved,
-		Tier:       2,
-		RiskScore:  riskScore,
-		RiskReason: riskReason,
-		Err:        err,
+		Approved:            approved,
+		Tier:                2,
+		RiskScore:           riskScore,
+		RiskReason:          riskReason,
+		ShadowWouldEscalate: true,
+		Err:                 err,
 	}
 }
 

@@ -94,9 +94,12 @@ curl -s -X POST http://localhost:8080/v1/agent/proxy \
 
 ---
 
-## Architecture: The 15-Stage Matthews Enforcement Framework (MEF)
+## Architecture: The 15-Stage Gateway Lifecycle & 9-Layer Admission Pipeline
 
-Cicada implements the **Matthews Enforcement Framework (MEF)**—a deterministic runtime security pipeline that evaluates every agent tool call, MCP JSON-RPC invocation, and LLM request across 15 sequential gates before a single packet leaves your perimeter:
+Cicada implements the **Matthews Enforcement Framework (MEF)** across two nested scopes (see [`RELEASE_SCOPE.md`](./RELEASE_SCOPE.md) for the complete Implemented-vs.-Designed matrix and post-June 2026 paper enhancements):
+
+1. **The 15-Stage End-to-End Gateway Lifecycle (`cmd/sentry/main.go`):** Covers the full HTTP proxy perimeter from cryptographic token admission (`Ed25519` + `ML-DSA-65` + `DPoP`), SSRF/IMDSv2 blocking, `ASI07` hop-chain verification, lock-free P2P Gossip quarantine, Ghost Mode honeypot routing, and Canary honeytoken traps, through admission, OPA Rego evaluation, `eakfd` subprocess sandboxing, outbound Vault/entropy DLP, BYOK key injection, inbound CoT scanning, and SHA-256 Edge Ledger persistence.
+2. **The 9-Layer Deterministic Admission Pipeline (`internal/pipeline/pipeline.go`):** Embedded at Stage 6–8 of the gateway lifecycle and shared across all 5 agent-facing handlers (`handleAgentRequest`, `handleSimulatedRequest`, `handleMCPExecution`, `handleLLMProxy`, and `handleGhostProxy`). Whereas the June 2026 paper specified a 4-layer core admission check, this release expands `pipeline.Evaluate` to 9 layers by adding **Forward-Saga Prerequisites** (Layer 5), **Server-Side Tool Manifest Scope** (Layer 6), **SQL/Bulk Blast Radius Estimation** (Layer 7), **Multivariate Transaction Profiling** (Layer 8), and **CaMeL Session Taint & Meta's Agents Rule of Two** (Layer 9):
 
 ```mermaid
 flowchart TD
@@ -224,6 +227,9 @@ docker compose exec core-api php artisan migrate --force
 # Option B: Native Local Fleet (PostgreSQL + Redis on host)
 cp .env.example .env
 ./start_fleet.sh      # Stop anytime with: ./stop_fleet.sh
+
+# Option C: Kubernetes Network Lockdown (Mandatory in production so agents and eakfd cannot bypass the proxy)
+kubectl apply -f deploy/k8s/eakfd-networkpolicy.yaml
 ```
 
 ---
@@ -243,6 +249,7 @@ Read `/docs/Platform_Documentation.md` and inspect `Sentry_Gateway/cmd/sentry/ma
 
 ## Deep-Dive Documentation (`docs/`)
 
+- **[`RELEASE_SCOPE.md`](./RELEASE_SCOPE.md)** — Implemented-versus-designed engineering matrix (covering `eakfd`, handler parity, k6 load scripts, and post-June paper additions).
 - **[`ARCHITECTURE_DEEP_DIVE.md`](./docs/ARCHITECTURE_DEEP_DIVE.md)** — Complete walkthrough of all 15 enforcement layers, cryptographic primitives, and threat models.
 - **[`EPHEMERAL_AGENT_KERNEL_FIREWALL.md`](./docs/EPHEMERAL_AGENT_KERNEL_FIREWALL.md)** — Specification for the `eakfd` gVisor/Kata kernel sandbox and `.tfstate`/IP output scrubber.
 - **[`CICADA_P2P_ARCHITECTURE_WHITEPAPER.md`](./docs/CICADA_P2P_ARCHITECTURE_WHITEPAPER.md)** — Lock-free P2P Gossip Mesh protocol and hybrid Ed25519 + ML-DSA-65 signature envelopes.
@@ -255,13 +262,12 @@ Read `/docs/Platform_Documentation.md` and inspect `Sentry_Gateway/cmd/sentry/ma
 
 This project is licensed under the **Apache License, Version 2.0** ([LICENSE](./LICENSE) and [NOTICE](./NOTICE)).
 
-Under **Apache License 2.0 Section 4(c) and Section 4(d)**, any clone, fork, redistribution, or derivative work must retain the [NOTICE](./NOTICE) file and include visible attribution to **Patrick Matthews** in your documentation or product notices:
+Pursuant to **Apache License 2.0 Section 4(c) and Section 4(d)**, any redistribution of this Work or Derivative Works must retain the [NOTICE](./NOTICE) file and reproduce its attribution notice in documentation or locations where third-party notices normally appear:
 
-> *"Built upon the Cicada Zero-Trust Agent Gateway and the Matthews Enforcement Framework (MEF), originally architected and developed by **Patrick Matthews** (Affinity Ops Ltd.)."*
+> *"Includes the Cicada Zero-Trust Agent Gateway and the Matthews Enforcement Framework (MEF), originally architected and developed by **Patrick Matthews** (Affinity Ops Ltd.)."*
 
 ```text
-Cicada Zero-Trust Agent Gateway Architecture & Matthews Enforcement Framework (MEF)
-Copyright 2026 Patrick Matthews & Affinity Ops Ltd. All rights reserved.
+Copyright 2026 Patrick Matthews and Affinity Ops Ltd.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -272,6 +278,6 @@ You may obtain a copy of the License at
 Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License and NOTICE file for the specific language governing
-permissions, mandatory attribution notices, and limitations under the License.
+See the License for the specific language governing permissions and
+limitations under the License.
 ```

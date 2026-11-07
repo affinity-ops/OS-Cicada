@@ -7,6 +7,7 @@ import 'package:aegis_ciba_companion/core/crypto/ed25519_service.dart';
 import 'package:aegis_ciba_companion/core/crypto/ml_dsa_service.dart';
 import 'package:aegis_ciba_companion/core/storage/secure_storage.dart';
 import 'package:aegis_ciba_companion/config/constants.dart';
+import 'package:aegis_ciba_companion/features/decision/bloc/decision_bloc.dart';
 
 /// In-memory implementation of SecureStorage for testing.
 /// Replaces FlutterSecureStorage so tests don't need a real device.
@@ -251,8 +252,14 @@ void main() {
       final decision = 'APPROVE';
       final nonce = 'abc123';
       final timestamp = '2026-01-01T00:00:00Z';
-      final payloadHash = holdRef; // Simplified
-      final signingPayload = '$holdRef|$decision|$nonce|$timestamp|$payloadHash';
+      final payloadHash = 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855';
+      final signingPayload = DecisionBloc.formatLengthPrefixedPayload([
+        holdRef,
+        decision,
+        nonce,
+        timestamp,
+        payloadHash,
+      ]);
 
       final ed25519Sig = await ed25519.sign(signingPayload);
       final mldsaSig = await mlDsa.sign(signingPayload);
@@ -271,15 +278,20 @@ void main() {
     });
 
     test('dual signing payload format matches Gateway expectations', () async {
-      // Verify the exact format the Gateway's HandleBatchDecisions expects
+      // Verify the exact length-prefixed format the Gateway's HandleBatchDecisions expects
       await ed25519.generateAndStore(storage);
 
-      final payload = 'hold-ref-42|REJECT|nonce-val|2026-05-26T12:00:00Z|hold-ref-42';
+      final payload = DecisionBloc.formatLengthPrefixedPayload([
+        'hold-ref-42',
+        'REJECT',
+        'nonce-val',
+        '2026-05-26T12:00:00Z',
+        'sha256-payload-hash',
+      ]);
       final sig = await ed25519.sign(payload);
 
-      // The payload format must be: hold_ref|decision|nonce|timestamp|hash
-      expect(payload.contains('|REJECT|'), isTrue);
-      expect(payload.startsWith('hold-ref-42'), isTrue);
+      // The payload format must be length-prefixed: <byte_len>:<field>|...
+      expect(payload, equals('11:hold-ref-42|6:REJECT|9:nonce-val|20:2026-05-26T12:00:00Z|19:sha256-payload-hash|'));
 
       // Signature must be base64-encoded 64 bytes
       final rawSig = base64Decode(sig);
