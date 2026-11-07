@@ -1,23 +1,38 @@
 cff-version: 1.2.0
-message: "If you use, fork, benchmark, or build upon Cicada or the Matthews Enforcement Framework (MEF), please credit and cite the original creator as below."
-title: "Cicada: Zero-Trust Runtime Enforcement Gateway & Matthews Enforcement Framework (MEF)"
+title: "Cicada: Zero-Trust Runtime Enforcement Gateway & Kernel Firewall for Autonomous AI Agents"
+message: "If you use Cicada in your research or engineering work, please cite both the software and the Matthews Execution Framework (MEF) paper."
+type: software
 authors:
-  - family-names: "Matthews"
-    given-names: "Patrick"
-    affiliation: "Patrick Matthews (Affinity Ops / Affinity Smart AI)"
-version: "1.0.0"
-date-released: "2026-10-15"
-license: "Apache-2.0"
+  - given-names: Patrick
+    family-names: Matthews
+    affiliation: "Affinity Ops (Affinity Smart AI)"
+    orcid: "https://orcid.org/0009-0000-2353-143X"
 repository-code: "https://github.com/affinity-ops/OS-Cicada"
+url: "https://doi.org/10.5281/zenodo.19597120"
 doi: "10.5281/zenodo.19597120"
+license: Apache-2.0
+version: "1.0.1"
+date-released: "2026-04-16"
+keywords:
+  - ai-agents
+  - zero-trust
+  - llm-security
+  - prompt-injection
+  - mcp
+  - ciba
+  - gvisor
+  - runtime-security
 preferred-citation:
-  type: report
+  type: article
+  title: "The Matthews Execution Framework (MEF)"
   authors:
-    - family-names: "Matthews"
-      given-names: "Patrick"
-      affiliation: "Patrick Matthews (Affinity Ops / Affinity Smart AI)"
-  title: "The Matthews Enforcement Framework (MEF): A Deterministic Mathematical Model for Zero-Trust Autonomous Agent Governance"
-  institution: "Patrick Matthews (Affinity Ops / Affinity Smart AI)"
-  year: 2026
+    - given-names: Patrick
+      family-names: Matthews
+      affiliation: "Affinity Ops (Affinity Smart AI)"
+      orcid: "https://orcid.org/0009-0000-2353-143X"
   doi: "10.5281/zenodo.19597120"
-  url: "https://papers.ssrn.com/sol3/papers.cfm?abstract_id=6612798"
+  url: "https://doi.org/10.5281/zenodo.19597120"
+  year: 2026
+  month: 6
+  publisher:
+    name: Zenodo
