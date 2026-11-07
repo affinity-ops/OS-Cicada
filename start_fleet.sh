@@ -93,6 +93,29 @@ if ! redis-cli -h "$REDIS_HOST" -p "$REDIS_PORT" ping 2>/dev/null | grep -q PONG
 fi
 echo "  Redis ✓ ($REDIS_HOST:$REDIS_PORT)"
 
+# ─── Pre-flight: dependencies a fresh clone does not have yet ────────────────
+missing=0
+if [ ! -d "$SCRIPT_DIR/Core_API/vendor" ]; then
+  echo "✗ Core_API dependencies missing. Run: (cd Core_API && composer install && cp .env.example .env && php artisan key:generate && php artisan migrate)"
+  missing=1
+fi
+"$PHP" -r 'exit(version_compare(PHP_VERSION, "8.3.0", ">=") ? 0 : 1);' 2>/dev/null || {
+  echo "✗ Core_API needs PHP 8.3+ (found: $("$PHP" -r 'echo PHP_VERSION;' 2>/dev/null || echo none)). Set PHP_BIN to a PHP 8.3+ binary."
+  missing=1
+}
+for app in dashboard Developer_Portal Gateway_Portal Master_Admin_Panel; do
+  if [ ! -d "$SCRIPT_DIR/$app/node_modules" ]; then
+    echo "✗ $app dependencies missing. Run: (cd $app && npm install && npm run build)"
+    missing=1
+  fi
+done
+if [ "$missing" = 1 ]; then
+  echo ""
+  echo "Install the dependencies above, then re-run ./start_fleet.sh."
+  echo "To run only the gateway: see README 'Run the gateway with Postgres + Redis'."
+  exit 1
+fi
+
 echo ""
 echo "╔══════════════════════════════════════════╗"
 echo "║       CICADA PLATFORM — STARTING         ║"
@@ -218,11 +241,15 @@ start_service "gw_portal" "GW_PID" \
   bash -c "cd '$SCRIPT_DIR/Gateway_Portal' && npm start >> '$LOGS/gateway_portal.log' 2>&1"
 wait_for_http "http://localhost:3002" "Gateway Portal :3002" 60
 
-# ─── 9. APK Download Server ─────────────────────────────────────────────────
+# ─── 9. APK Download Server (optional) ───────────────────────────────────────
 echo "[9/10] APK Download Server (Python, :3004)"
-start_service "apk_server" "APK_PID" \
-  bash -c "cd '$SCRIPT_DIR/Ciba_Flutter_App/apk_server' && python3 -m http.server 3004 --bind 0.0.0.0 >> '$LOGS/apk_server.log' 2>&1"
-wait_for_http "http://localhost:3004" "APK Server :3004" 10
+if [ -d "$SCRIPT_DIR/Ciba_Flutter_App/apk_server" ]; then
+  start_service "apk_server" "APK_PID" \
+    bash -c "cd '$SCRIPT_DIR/Ciba_Flutter_App/apk_server' && python3 -m http.server 3004 --bind 0.0.0.0 >> '$LOGS/apk_server.log' 2>&1"
+  wait_for_http "http://localhost:3004" "APK Server :3004" 10
+else
+  echo "  [skip] Ciba_Flutter_App/apk_server not present (build the APK to enable)"
+fi
 
 # ─── 10. Master Admin Panel ──────────────────────────────────────────────────
 echo "[10/10] Master Admin Panel (Next.js, :3005)"

@@ -61,6 +61,17 @@ type portalIdentity struct {
 	ContactID string
 }
 
+// AuthenticatePortalRequest validates a portal session bearer token against
+// the Core API and returns the session's tenant. Exported for the gateway's
+// admin-route middleware (cmd/sentry/admin_auth.go).
+func AuthenticatePortalRequest(r *http.Request) (tenantID string, err error) {
+	id, err := authenticatePortalRequest(r)
+	if err != nil {
+		return "", err
+	}
+	return id.TenantID, nil
+}
+
 // authenticatePortalRequest validates the bearer token against the Core API.
 // This is the single authentication gate for all portal-facing endpoints in
 // this file. It returns the authenticated identity (tenant + contact) or an

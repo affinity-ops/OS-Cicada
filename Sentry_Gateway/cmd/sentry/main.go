@@ -584,7 +584,7 @@ func main() {
 		})
 	})
 
-	r.Post("/v1/portal/test-push", func(w http.ResponseWriter, r *http.Request) {
+	r.With(requireServiceOrPortal).Post("/v1/portal/test-push", func(w http.ResponseWriter, r *http.Request) {
 		// Look up the active device push token and fingerprint
 		var pushToken, deviceFingerprint, tenantID string
 		err := store.DB.QueryRow(r.Context(),
@@ -640,10 +640,10 @@ func main() {
 	r.Post("/v1/agent/register/yaml", handleYAMLRegistration) // P2.3: cicada.yaml consumer endpoint
 	r.Post("/v1/agent/session", handleAgentSession)  // Stage 7.1: exchange EVAR for JIT session token
 	r.Post("/v1/agent/proxy", handleAgentRequest)
-	r.Post("/v1/agent/rollback", handleAgentRollback)
+	r.With(requireServiceOrPortal).Post("/v1/agent/rollback", handleAgentRollback)
 	r.Post("/v1/llm/proxy", handleLLMProxy)          // LLM API proxy: memory isolation + reasoning audit
 	r.Post("/v1/gossip/receive", handleGossipReceive)   // inter-node gossip transport
-	r.Post("/v1/sandbox/report", handleSandboxReport)   // anomaly reports from shadow sandbox
+	r.With(requireService).Post("/v1/sandbox/report", handleSandboxReport)   // anomaly reports from shadow sandbox
 	r.Get("/v1/verify/agent/{evar}", handlePublicTrustIntrospection)
 	r.Post("/v1/vault/keys/bind", handleKeyBinding)
 	r.Post("/v1/aegis/directives", handleAegisDirectives)
@@ -656,7 +656,7 @@ func main() {
 	r.Post("/v1/sso/caep/webhook", caep.Handler(gossipMesh, edgeLedger)) // inbound CAEP: external IdP → Cicada revocation
 
 	// STRICT API BOUNDARY: Endpoint for Core API to fetch aegis devices
-	r.Get("/v1/internal/aegis/devices", func(w http.ResponseWriter, r *http.Request) {
+	r.With(requireService).Get("/v1/internal/aegis/devices", func(w http.ResponseWriter, r *http.Request) {
 		tenantID := r.Header.Get("X-Cicada-Tenant-ID")
 		if tenantID == "" {
 			writeError(w, `{"error":"tenant_id required"}`, http.StatusBadRequest)
@@ -806,7 +806,7 @@ func main() {
 	})
 
 	// Federation provider management API
-	r.Get("/v1/federation/providers", func(w http.ResponseWriter, r *http.Request) {
+	r.With(requireServiceOrPortal).Get("/v1/federation/providers", func(w http.ResponseWriter, r *http.Request) {
 		tenantID := r.Header.Get("X-Cicada-Tenant-ID")
 		if tenantID == "" {
 			writeError(w, `{"error":"tenant_id required"}`, http.StatusBadRequest)
@@ -821,7 +821,7 @@ func main() {
 		json.NewEncoder(w).Encode(map[string]interface{}{"providers": providers, "count": len(providers)})
 	})
 
-	r.Post("/v1/federation/providers", func(w http.ResponseWriter, r *http.Request) {
+	r.With(requireServiceOrPortal).Post("/v1/federation/providers", func(w http.ResponseWriter, r *http.Request) {
 		var p federation.Provider
 		if err := json.NewDecoder(r.Body).Decode(&p); err != nil {
 			writeError(w, `{"error":"invalid JSON"}`, http.StatusBadRequest)
@@ -862,7 +862,7 @@ func main() {
 
 	// ── S6.3: Role Mapping CRUD ──
 	// List role mappings for a provider
-	r.Get("/v1/federation/providers/{provider_id}/mappings", func(w http.ResponseWriter, r *http.Request) {
+	r.With(requireServiceOrPortal).Get("/v1/federation/providers/{provider_id}/mappings", func(w http.ResponseWriter, r *http.Request) {
 		providerID := chi.URLParam(r, "provider_id")
 		mappings, err := rolemapping.LoadMappings(r.Context(), store.DB, providerID)
 		if err != nil {
@@ -874,7 +874,7 @@ func main() {
 	})
 
 	// Create a role mapping
-	r.Post("/v1/federation/providers/{provider_id}/mappings", func(w http.ResponseWriter, r *http.Request) {
+	r.With(requireServiceOrPortal).Post("/v1/federation/providers/{provider_id}/mappings", func(w http.ResponseWriter, r *http.Request) {
 		providerID := chi.URLParam(r, "provider_id")
 		var m rolemapping.Mapping
 		if err := json.NewDecoder(r.Body).Decode(&m); err != nil {
@@ -896,7 +896,7 @@ func main() {
 	})
 
 	// Delete a role mapping
-	r.Delete("/v1/federation/mappings/{mapping_id}", func(w http.ResponseWriter, r *http.Request) {
+	r.With(requireServiceOrPortal).Delete("/v1/federation/mappings/{mapping_id}", func(w http.ResponseWriter, r *http.Request) {
 		mappingID := chi.URLParam(r, "mapping_id")
 		if err := rolemapping.DeleteMapping(r.Context(), store.DB, mappingID); err != nil {
 			writeError(w, fmt.Sprintf(`{"error":"%s"}`, err.Error()), http.StatusNotFound)
@@ -907,7 +907,7 @@ func main() {
 	})
 
 	// Test role resolution (dry-run — does not create a session)
-	r.Post("/v1/federation/providers/{provider_id}/resolve-role", func(w http.ResponseWriter, r *http.Request) {
+	r.With(requireServiceOrPortal).Post("/v1/federation/providers/{provider_id}/resolve-role", func(w http.ResponseWriter, r *http.Request) {
 		providerID := chi.URLParam(r, "provider_id")
 		var req struct {
 			Groups []string `json:"groups"`
@@ -975,7 +975,7 @@ func main() {
 
 	// Manual rotation: immediately re-mints an agent's EVAR.
 	// Requires operator authentication (portal session or admin API key).
-	r.Post("/v1/agent/{agent_id}/rotate", func(w http.ResponseWriter, r *http.Request) {
+	r.With(requireServiceOrPortal).Post("/v1/agent/{agent_id}/rotate", func(w http.ResponseWriter, r *http.Request) {
 		agentID := chi.URLParam(r, "agent_id")
 		if agentID == "" {
 			writeError(w, `{"error":"agent_id is required"}`, http.StatusBadRequest)
@@ -1023,7 +1023,7 @@ func main() {
 	})
 
 	// Rotation audit trail: returns the credential lifecycle history for an agent.
-	r.Get("/v1/agent/{agent_id}/rotation-history", func(w http.ResponseWriter, r *http.Request) {
+	r.With(requireServiceOrPortal).Get("/v1/agent/{agent_id}/rotation-history", func(w http.ResponseWriter, r *http.Request) {
 		agentID := chi.URLParam(r, "agent_id")
 		if agentID == "" {
 			writeError(w, `{"error":"agent_id is required"}`, http.StatusBadRequest)
@@ -1049,10 +1049,10 @@ func main() {
 	// outside Cicada's perimeter. The agent registry is the "known good"
 	// source of truth; CASB feeds "unknown" agents for operator review.
 	shadowStore := shadow.NewStore()
-	r.Post("/v1/shadow/ingest", shadow.IngestHandler(shadowStore))        // CASB webhook: report shadow agent sightings
-	r.Get("/v1/shadow/agents", shadow.ListHandler(shadowStore))           // Dashboard: list shadow agents
-	r.Get("/v1/shadow/stats", shadow.StatsHandler(shadowStore))           // Dashboard: aggregate shadow statistics
-	r.Post("/v1/shadow/agents/{id}/status", shadow.UpdateHandler(shadowStore)) // Operator: acknowledge/quarantine/register
+	r.With(requireService).Post("/v1/shadow/ingest", shadow.IngestHandler(shadowStore))        // CASB webhook: report shadow agent sightings
+	r.With(requireServiceOrPortal).Get("/v1/shadow/agents", shadow.ListHandler(shadowStore))           // Dashboard: list shadow agents
+	r.With(requireServiceOrPortal).Get("/v1/shadow/stats", shadow.StatsHandler(shadowStore))           // Dashboard: aggregate shadow statistics
+	r.With(requireServiceOrPortal).Post("/v1/shadow/agents/{id}/status", shadow.UpdateHandler(shadowStore)) // Operator: acknowledge/quarantine/register
 
 	// ── Phase 1-7: Aegis Mobile Device Endpoints ──
 	// Injects the PostgreSQL pool into the mobile package and registers

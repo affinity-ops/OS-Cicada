@@ -59,6 +59,8 @@ export default function FederationPage() {
   const headers = {
     'Content-Type': 'application/json',
     'X-Cicada-Tenant-ID': session?.tenant.id || '',
+    // Federation routes require a portal session; the gateway pins the tenant to it.
+    Authorization: `Bearer ${session?.token || ''}`,
   };
 
   useEffect(() => {

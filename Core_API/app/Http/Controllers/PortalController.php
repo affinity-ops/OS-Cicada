@@ -590,7 +590,10 @@ class PortalController extends Controller
         
         try {
             $response = \Illuminate\Support\Facades\Http::timeout(5)
-                ->withHeaders(['X-Cicada-Tenant-ID' => $tenantId])
+                ->withHeaders([
+                    'X-Cicada-Tenant-ID' => $tenantId,
+                    'X-Gateway-Secret'   => (string) env('GATEWAY_INTERNAL_KEY', ''),
+                ])
                 ->get("{$gatewayUrl}/v1/internal/aegis/devices");
 
             if ($response->successful()) {

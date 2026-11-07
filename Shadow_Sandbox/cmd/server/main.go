@@ -191,6 +191,10 @@ func reportToGossip(agentID, tenantID, traceID string, result analyzer.Result) {
 		return
 	}
 	req.Header.Set("Content-Type", "application/json")
+	// The gateway's /v1/sandbox/report requires the shared internal key.
+	if key := os.Getenv("CICADA_INTERNAL_KEY"); key != "" {
+		req.Header.Set("X-Gateway-Secret", key)
+	}
 
 	client := &http.Client{Timeout: 5 * time.Second}
 	resp, err := client.Do(req)

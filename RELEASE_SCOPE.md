@@ -14,7 +14,7 @@ The documentation and codebase refer to two complementary numbers that operate a
      1. Cryptographic Admission (Ed25519 EVAR / 15-minute JIT Session JWT + RFC 9449 DPoP proof + RFC 8693 ID-JAG human context)
      2. Certification & Data Residency Gate (`certified` / `pending_review` provisional mode / region pinning)
      3. Tier-1 SSRF & DNS-Rebinding Guard (`internal/ssrf`, HTTPS enforcement, RFC 1918 & `169.254.169.254` IMDSv2 block)
-     4. ASI07 Inter-Agent Cryptographic Hop Chain (`internal/chain`) & Skill JSON Schema Contract (`internal/skill`)
+     4. ASI07 Inter-Agent Cryptographic Hop Chain (`internal/chain`) & Skill JSON Schema Contract (`internal/agentcache/schema_validator.go`)
      5. Lock-Free P2P Gossip Quarantine Check (`internal/gossip`, `sync/atomic.Pointer` `O(1)` lookup)
      6. Ghost Mode Deception Router (`internal/ghostmode`, diverts flagged agents to `Shadow_Sandbox`)
      7. Multi-Encoding Canary Honeytoken Trap (`internal/canary`, raw/Base64/Hex/URL/SHA-256 `CICADA_CANARY_*` detection + instant mesh quarantine)
@@ -36,13 +36,13 @@ The documentation and codebase refer to two complementary numbers that operate a
 
 ## 2. Handler Enforcement Parity Matrix
 
-All five agent-facing handlers in `Sentry_Gateway/cmd/sentry/main.go` are wired to the deterministic security controls:
+Four request handlers run the 9-layer pipeline. `handleGhostProxy` is a deception sink for agents already flagged and does not re-run admission. The production MCP control plane (`POST /v1/mcp`, `internal/mcpserver`) is an operator interface rather than agent traffic: it requires `CICADA_AEGIS_TOKEN`, and its release/rollback/activate-policy tools need server-side human approval (`CICADA_OPERATOR_APPROVAL_TOKEN`).
 
 | Handler | Endpoint | Auth & Quarantine | SSRF & Canary Trap | Server-Side Tool Manifest (`ResolveToolForRequest`) | 9-Layer `pipeline.Evaluate` | Taint Tracking (`internal/taint`) |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
 | **`handleAgentRequest`** | `POST /v1/agent/proxy` | EVAR / Session + DPoP + Gossip | Enforced | Enforced (Fail-closed) | All 9 layers + OPA + CIBA + EAKF + DLP | Selective `GET` taint (untrusted/external only) + provenance |
 | **`handleSimulatedRequest`** | `POST /v1/agent/proxy` (Sim mode) | Optional token + Gossip | Enforced | Enforced (Fail-closed) | All 9 layers + OPA + DLP | Selective `GET` taint (untrusted/external only) + provenance |
-| **`handleMCPExecution`** | `POST /v1/mcp/execute` | Loopback IP + Aegis Bearer token | Enforced via pipeline | Enforced (Fail-closed) | All 9 layers | Marks quarantined target tainted; records completed tool |
+| **`handleMCPExecution`** | `POST /v1/aegis/mcp/execute` (legacy) | Loopback IP + Aegis Bearer token | Enforced via pipeline | Enforced (Fail-closed) | All 9 layers | Marks quarantined target tainted; records completed tool |
 | **`handleLLMProxy`** | `POST /v1/llm/proxy` | EVAR / Session + Gossip | Enforced | Enforced (Fail-closed) | All 9 layers + per-message injection & SimHash memory isolation | Taints session on `role: "tool"` / `"function"`, untrusted provenance, or cross-agent contamination |
 | **`handleGhostProxy`** | Internal diversion from `handleAgentRequest` | Invoked post-admission | Isolated honeypot | N/A (Deception sink) | Invoked after admission/ghost flag | Immediately marks agent session tainted (`ghost_sandbox:*`) and records SHA-256 payload hash |
 
@@ -124,3 +124,38 @@ No vulnerabilities found.
 Your code is affected by 0 vulnerabilities.
 ```
 
+
+---
+
+## 5. Production-Path Verification (2026-11-07)
+
+First end-to-end run of the real request path (simulation off) against PostgreSQL 15, Redis and the Core API, with `CICADA_INTERNAL_KEY` set. `scripts/e2e_production.sh`: **19/19 checks passed**.
+
+| Check | Result |
+| :--- | :--- |
+| Health: gateway's own Postgres pool, Redis, Core API | pass |
+| Provisioned agent registers and receives an EVAR | pass (201) |
+| Unknown agent refused | pass (404) |
+| Agent requesting unprovisioned scopes refused | pass (403) |
+| Registration without `X-Gateway-Secret` refused | pass (401) |
+| EVAR exchanged for a JIT session token | pass (200) |
+| Benign proxied request admitted | pass (200) |
+| Prompt injection / SSRF to metadata / credential exfiltration | pass (403 each) |
+| Request without credentials | pass (401) |
+| Anonymous calls to 6 admin routes (federation, devices, rotate, shadow, test-push, sandbox report) | pass (401 each) |
+
+Header spoofing (`X-Real-IP`) and gossip authentication cannot be tested from localhost; they are covered by `TestTrustedRealIP` and `TestAuthenticateBatch`.
+
+## 6. Not Implemented / Known Limitations
+
+| Item | Status |
+| :--- | :--- |
+| SSO federation (OIDC/SAML role mapping) | Routes exist and are now authenticated, but `federation_providers` / `role_mappings` tables are not created by `active_migrations/`, so the feature does not work on a fresh install. |
+| License tier limits (`GetMaxAgents`, `MeshAllowed`, `GetMeshTier`) | Not enforced; only the license signature is verified. |
+| Canary token issuing (`canary.Issue` / `Revoke`) | Not wired; detection of `CICADA_CANARY_*` works. |
+| `hitl.ClassifyDestructiveAction` | Not wired into the request path. |
+| Firecracker microVM orchestration | Design only. |
+| Full UI fleet and mobile approval round trip | Not tested end to end against this release. |
+| Independent security review | Not performed. |
+
+Run `scripts/verify_release.sh` to reproduce the build, test, vulnerability-scan and quickstart results.

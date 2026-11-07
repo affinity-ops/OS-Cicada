@@ -10,6 +10,8 @@ GATEWAY="${GATEWAY:-http://localhost:8080}"
 AGENT_ID="${AGENT_ID:?set AGENT_ID to a seeded agent UUID}"
 TENANT_ID="${TENANT_ID:?set TENANT_ID to the tenant UUID of that agent}"
 FAIL=0
+# If the gateway runs with CICADA_INTERNAL_KEY, pass the same value as GATEWAY_SECRET.
+SECRET_HDR=(-H "X-Gateway-Secret: ${GATEWAY_SECRET:-}")
 pass() { echo "  PASS  $1"; }
 fail() { echo "  FAIL  $1"; FAIL=$((FAIL+1)); }
 
@@ -38,13 +40,13 @@ expect "gateway healthy" 200 "$CODE" "$BODY"
 echo "$BODY" | grep -q '"postgres":true' && pass "gateway's own Postgres pool connected" || fail "postgres not connected: $BODY"
 
 echo "== 1. Registration (EVAR issuance)"
-req POST /v1/agent/register -H 'Content-Type: application/json' \
+req POST /v1/agent/register "${SECRET_HDR[@]}" -H 'Content-Type: application/json' \
   -d "{\"agent_id\":\"$AGENT_ID\",\"tenant_id\":\"$TENANT_ID\",\"code_hash\":\"sha256:e2e\",\"scopes\":[\"proxy:read\",\"proxy:write\"],\"intended_model\":\"gpt-4o\"}"
 expect "register seeded agent" 201 "$CODE" "$BODY"
 EVAR=$(echo "$BODY" | jfield evar)
 [ -n "$EVAR" ] && pass "EVAR issued" || fail "no EVAR in response"
 
-req POST /v1/agent/register -H 'Content-Type: application/json' \
+req POST /v1/agent/register "${SECRET_HDR[@]}" -H 'Content-Type: application/json' \
   -d '{"agent_id":"00000000-0000-0000-0000-00000000dead","code_hash":"sha256:x","scopes":["admin:*"]}'
 if [ "$CODE" = "201" ] && [ -n "$(echo "$BODY" | jfield evar)" ]; then
   fail "unknown agent (not in registry) was issued an EVAR"
@@ -52,7 +54,7 @@ else
   pass "unknown agent refused (HTTP $CODE)"
 fi
 
-req POST /v1/agent/register -H 'Content-Type: application/json' \
+req POST /v1/agent/register "${SECRET_HDR[@]}" -H 'Content-Type: application/json' \
   -d "{\"agent_id\":\"$AGENT_ID\",\"code_hash\":\"sha256:e2e\",\"scopes\":[\"proxy:read\",\"proxy:call\"]}"
 expect "agent cannot grant itself unprovisioned scopes" 403 "$CODE" "$BODY"
 
@@ -87,7 +89,17 @@ req POST /v1/agent/proxy -H 'Content-Type: application/json' -H "X-Cicada-Agent-
   -H 'X-Cicada-Target-URL: https://api.github.com/x' -d '{"q":"x"}'
 case "$CODE" in 401|403) pass "request without credentials refused (HTTP $CODE)";; *) fail "unauthenticated request: HTTP $CODE";; esac
 
-echo "== 4. Header spoofing / gossip auth"
+echo "== 4. Admin routes refuse anonymous callers"
+if [ -n "${GATEWAY_SECRET:-}" ]; then
+  for route in "POST /v1/federation/providers" "GET /v1/internal/aegis/devices" "POST /v1/agent/$AGENT_ID/rotate" "GET /v1/shadow/agents" "POST /v1/portal/test-push" "POST /v1/sandbox/report"; do
+    req ${route% *} "${route#* }" -H 'Content-Type: application/json' -d '{}'
+    expect "anonymous ${route}" 401 "$CODE" "$BODY"
+  done
+else
+  echo "  SKIP  set GATEWAY_SECRET (and run the gateway with CICADA_INTERNAL_KEY) to test admin-route auth"
+fi
+
+echo "== 5. Header spoofing / gossip auth"
 echo "  NOTE  Not testable from localhost: this script's traffic really is loopback."
 echo "        Covered by unit tests: TestTrustedRealIP (cmd/sentry) and TestAuthenticateBatch (internal/gossip)."
 

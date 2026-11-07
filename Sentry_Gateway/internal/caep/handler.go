@@ -121,8 +121,16 @@ func Handler(mesh *gossip.Mesh, el *ledger.EdgeLedger) http.HandlerFunc {
 			return
 		}
 
-		// ── Validate HMAC signature if configured ───────────────────────
+		// ── Validate HMAC signature (fail closed) ───────────────────────
+		// Previously skipped entirely when no secret was configured, letting
+		// anyone post revocation events. Unsigned events are now accepted only
+		// in CICADA_DEV_MODE.
 		webhookSecret := os.Getenv("CICADA_CAEP_WEBHOOK_SECRET")
+		if webhookSecret == "" && os.Getenv("CICADA_DEV_MODE") != "true" {
+			log.Printf("[CAEP] REJECTED: CICADA_CAEP_WEBHOOK_SECRET not configured (issuer %q)", set.Iss)
+			writeError(w, "webhook signing secret not configured", http.StatusServiceUnavailable)
+			return
+		}
 		if webhookSecret != "" {
 			signature := r.Header.Get("X-Cicada-Signature")
 			if signature == "" {
