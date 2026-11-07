@@ -26,7 +26,7 @@ The documentation and codebase refer to two complementary numbers that operate a
      12. **Layer 4 (`drift_guard`):** Non-self-poisoning sliding-window cosine similarity context shift detector (`internal/drift`)
      13. **Layer 5 (`prerequisite`):** Fail-closed Forward-Saga prerequisite verification (`internal/prerequisite`)
      14. **Layer 6 (`tool_scope`):** Server-side tool manifest & parameter constraint enforcement (`internal/toolscope`, `internal/agentcache`)
-     15. **Layer 7 (`blast_radius`):** Destructive SQL (`WHERE 1=1`, `DROP`, `TRUNCATE`) & bulk record cap estimator (`internal/blastradius`)
+     15. **Layer 7 (`blast_radius`):** Destructive SQL (`WHERE 1=1`, `DROP`, `TRUNCATE`), bulk record cap estimator (`internal/blastradius`), and destructive-action classification (`internal/hitl.ClassifyDestructiveAction` — including non-DELETE verbs such as `lifecycle_policy`, `suspend_backup`, `delete_snapshot`)
      16. **Layer 8 (`tx_profile`):** Multivariate Z-score financial anomaly profiler & deontic rule evaluator (`internal/txprofile`)
      17. **Layer 9 (`camel_taint`):** CaMeL-style session taint tracking & Rule-of-Two capability revocation (`internal/taint`)
    - **Post-Admission Execution & Egress/Ingress Auditing:**
@@ -153,7 +153,6 @@ Header spoofing (`X-Real-IP`) and gossip authentication cannot be tested from lo
 | SSO federation (OIDC/SAML role mapping) | Routes exist and are now authenticated, but `federation_providers` / `role_mappings` tables are not created by `active_migrations/`, so the feature does not work on a fresh install. |
 | License tier limits (`GetMaxAgents`, `MeshAllowed`, `GetMeshTier`) | Not enforced; only the license signature is verified. |
 | Canary token issuing (`canary.Issue` / `Revoke`) | Not wired; detection of `CICADA_CANARY_*` works. |
-| `hitl.ClassifyDestructiveAction` | Not wired into the request path. |
 | Firecracker microVM orchestration | Design only. |
 | Full UI fleet and mobile approval round trip | Not tested end to end against this release. |
 | Independent security review | Not performed. |

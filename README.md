@@ -143,7 +143,6 @@ Documented clearly so operators and evaluators know exact boundaries before depl
 | **SSO federation (OIDC/SAML role mapping)** | Not functional on a fresh install: its tables (`federation_providers`, `role_mappings`) are not created by the active migrations. |
 | **License tier limits** (max agents, mesh tier) | Not enforced. The license signature is verified, but tier fields are not applied. |
 | **Canary token issuing** | Detection of `CICADA_CANARY_*` works; the gateway does not issue or rotate canary tokens for you. |
-| **Destructive-action classifier** (`hitl.ClassifyDestructiveAction`) | Present but not wired into the request path. |
 | **Presidio NER for PII** | Optional external service, not bundled. Without it, PII detection is regex-only. |
 | **Full UI fleet** (`start_fleet.sh`) | Requires `composer install` and `npm install && npm run build` in each UI app first; the script checks and tells you what is missing. The dashboards have not been tested end to end against this release. |
 | **Mobile approval round trip** | Signing format is tested on both sides; a full phone-to-gateway approval has not been run end to end. |

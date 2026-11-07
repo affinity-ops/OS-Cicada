@@ -92,15 +92,16 @@ const defaultHumanApprovalTimeoutSeconds = 60
 // Includes Tier 1 risk score so the human reviewer understands why the call
 // was escalated — they should not need to re-evaluate from scratch.
 type ApprovalRequest struct {
-	TraceID        string   `json:"trace_id"`
-	AgentID        string   `json:"agent_id"`
-	TenantID       string   `json:"tenant_id"`
-	Scopes         []string `json:"scopes"`
-	TargetAPI      string   `json:"target_api"`
-	PayloadPreview string   `json:"payload_preview,omitempty"`
-	RiskScore      float64  `json:"risk_score"`    // Tier 1 score that triggered escalation
-	RiskReason     string   `json:"risk_reason"`   // why Tier 1 flagged this call
-	RequestedAt    string   `json:"requested_at"`
+	TraceID           string                 `json:"trace_id"`
+	AgentID           string                 `json:"agent_id"`
+	TenantID          string                 `json:"tenant_id"`
+	Scopes            []string               `json:"scopes"`
+	TargetAPI         string                 `json:"target_api"`
+	PayloadPreview    string                 `json:"payload_preview,omitempty"`
+	RiskScore         float64                `json:"risk_score"`                    // Tier 1 score that triggered escalation
+	RiskReason        string                 `json:"risk_reason"`                   // why Tier 1 flagged this call
+	DestructiveAction *DestructiveActionInfo `json:"destructive_action,omitempty"`  // classified destructive action metadata
+	RequestedAt       string                 `json:"requested_at"`
 }
 
 // ApprovalResponse is the expected JSON body from the developer's webhook.
@@ -112,10 +113,11 @@ type ApprovalResponse struct {
 // TieredCheckResult carries the approval outcome and which tier produced it.
 type TieredCheckResult struct {
 	Approved            bool
-	Tier                int     // 1 = auto-approved by policy, 2 = human decision
+	Tier                int                    // 1 = auto-approved by policy, 2 = human decision
 	RiskScore           float64
 	RiskReason          string
-	ShadowWouldEscalate bool    // true when 0.30 <= RiskScore < threshold (measured in shadow mode)
+	DestructiveAction   *DestructiveActionInfo // populated when a destructive pattern matches
+	ShadowWouldEscalate bool                   // true when 0.30 <= RiskScore < threshold (measured in shadow mode)
 	Err                 error
 }
 
@@ -129,6 +131,10 @@ type TieredCheckResult struct {
 func TieredCheck(webhookURL, traceID, agentID, tenantID, targetAPI string, scopes []string, payloadPreview string) TieredCheckResult {
 	// ── Tier 1: Policy pre-check ──────────────────────────────────────────────
 	riskScore, riskReason := policyPreCheck(scopes, targetAPI, payloadPreview)
+	var destructiveInfo *DestructiveActionInfo
+	if da := ClassifyDestructiveAction("", targetAPI, payloadPreview); da.IsDestructive {
+		destructiveInfo = &da
+	}
 
 	threshold := policyRiskThreshold()
 	if strings.EqualFold(os.Getenv("HITL_SINGLE_SIGNAL_MODE"), "enforce") && threshold > 0.30 {
@@ -152,6 +158,7 @@ func TieredCheck(webhookURL, traceID, agentID, tenantID, targetAPI string, scope
 			Tier:                1,
 			RiskScore:           riskScore,
 			RiskReason:          riskReason,
+			DestructiveAction:   destructiveInfo,
 			ShadowWouldEscalate: shadowFlag,
 		}
 	}
@@ -161,12 +168,13 @@ func TieredCheck(webhookURL, traceID, agentID, tenantID, targetAPI string, scope
 	log.Printf("[HITL] Tier 1 escalating to human: agent=%s trace=%s score=%.2f reason=%q",
 		agentID, traceID, riskScore, riskReason)
 
-	approved, err := humanWebhook(webhookURL, traceID, agentID, tenantID, targetAPI, scopes, payloadPreview, riskScore, riskReason)
+	approved, err := humanWebhook(webhookURL, traceID, agentID, tenantID, targetAPI, scopes, payloadPreview, riskScore, riskReason, destructiveInfo)
 	return TieredCheckResult{
 		Approved:            approved,
 		Tier:                2,
 		RiskScore:           riskScore,
 		RiskReason:          riskReason,
+		DestructiveAction:   destructiveInfo,
 		ShadowWouldEscalate: true,
 		Err:                 err,
 	}
@@ -175,7 +183,11 @@ func TieredCheck(webhookURL, traceID, agentID, tenantID, targetAPI string, scope
 // Check is the legacy flat-timeout webhook check. Preserved for callers that
 // do not yet use TieredCheck. New code should call TieredCheck.
 func Check(webhookURL, traceID, agentID, tenantID, targetAPI string, scopes []string, payloadPreview string) (bool, error) {
-	return humanWebhook(webhookURL, traceID, agentID, tenantID, targetAPI, scopes, payloadPreview, 1.0, "legacy-direct-check")
+	var destructiveInfo *DestructiveActionInfo
+	if da := ClassifyDestructiveAction("", targetAPI, payloadPreview); da.IsDestructive {
+		destructiveInfo = &da
+	}
+	return humanWebhook(webhookURL, traceID, agentID, tenantID, targetAPI, scopes, payloadPreview, 1.0, "legacy-direct-check", destructiveInfo)
 }
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -222,17 +234,18 @@ func policyPreCheck(scopes []string, targetAPI, payloadPreview string) (float64,
 		}
 	}
 
-	// Write scope targeting paths that look like bulk-delete operations.
-	// A billing agent that legitimately uses proxy:write should not be calling
-	// /v1/users/bulk_delete or similar destructive batch operations.
-	if hasWrite && targetAPI != "" {
-		destructivePaths := []string{"delete", "destroy", "purge", "wipe", "truncate", "bulk_delete", "batch_delete"}
-		lowerURL := strings.ToLower(targetAPI)
-		for _, dp := range destructivePaths {
-			if strings.Contains(lowerURL, dp) {
+	// Write/transact scope targeting destructive paths or payloads (including
+	// non-DELETE-verb destructive operations such as lifecycle_policy,
+	// suspend_backup, delete_snapshot, DROP TABLE, TRUNCATE, rm -rf).
+	if (hasWrite || hasTransact) && (targetAPI != "" || payloadPreview != "") {
+		if da := ClassifyDestructiveAction("", targetAPI, payloadPreview); da.IsDestructive {
+			riskScore += 0.30
+			reasons = append(reasons, fmt.Sprintf("destructive action (%s/%s): %s [pattern=%q]", da.ActionType, da.Severity, da.ActionDescription, da.MatchedPattern))
+		} else if hasWrite && targetAPI != "" {
+			lowerURL := strings.ToLower(targetAPI)
+			if strings.Contains(lowerURL, "delete") {
 				riskScore += 0.30
-				reasons = append(reasons, fmt.Sprintf("proxy:write targeting destructive path pattern %q", dp))
-				break
+				reasons = append(reasons, `proxy:write targeting destructive path pattern "delete"`)
 			}
 		}
 	}
@@ -281,17 +294,18 @@ func policyPreCheck(scopes []string, targetAPI, payloadPreview string) (float64,
 // Tier 2: Human webhook
 // ────────────────────────────────────────────────────────────────────────────
 
-func humanWebhook(webhookURL, traceID, agentID, tenantID, targetAPI string, scopes []string, payloadPreview string, riskScore float64, riskReason string) (bool, error) {
+func humanWebhook(webhookURL, traceID, agentID, tenantID, targetAPI string, scopes []string, payloadPreview string, riskScore float64, riskReason string, destructiveInfo *DestructiveActionInfo) (bool, error) {
 	body, err := json.Marshal(ApprovalRequest{
-		TraceID:        traceID,
-		AgentID:        agentID,
-		TenantID:       tenantID,
-		Scopes:         scopes,
-		TargetAPI:      targetAPI,
-		PayloadPreview: payloadPreview,
-		RiskScore:      riskScore,
-		RiskReason:     riskReason,
-		RequestedAt:    time.Now().UTC().Format(time.RFC3339),
+		TraceID:           traceID,
+		AgentID:           agentID,
+		TenantID:          tenantID,
+		Scopes:            scopes,
+		TargetAPI:         targetAPI,
+		PayloadPreview:    payloadPreview,
+		RiskScore:         riskScore,
+		RiskReason:        riskReason,
+		DestructiveAction: destructiveInfo,
+		RequestedAt:       time.Now().UTC().Format(time.RFC3339),
 	})
 	if err != nil {
 		return false, fmt.Errorf("failed to marshal HITL approval request: %w", err)

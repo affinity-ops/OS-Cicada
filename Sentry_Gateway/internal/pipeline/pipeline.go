@@ -36,6 +36,7 @@ import (
 
 	"github.com/asai/cicada/sentry/internal/blastradius"
 	"github.com/asai/cicada/sentry/internal/drift"
+	"github.com/asai/cicada/sentry/internal/hitl"
 	"github.com/asai/cicada/sentry/internal/injection"
 	"github.com/asai/cicada/sentry/internal/prerequisite"
 	"github.com/asai/cicada/sentry/internal/semantic"
@@ -107,10 +108,11 @@ type PipelineResult struct {
 	DriftDetected   bool                          // true = drift guard flagged a context shift (triggers CIBA)
 	DriftReason     string                        // human-readable explanation for the CIBA notification
 	DriftScore      float64                       // cosine similarity score (0.0 = total shift, 1.0 = identical)
-	ForceCIBA       bool                          // true = any escalation layer (Drift, BlastRadius, TxProfile, CaMeL Taint) requires human sign-off
-	CIBAReasons     []string                      // aggregated reasons requiring CIBA sign-off
-	BlastEstimate   blastradius.Estimate          // Layer 7 blast-radius assessment
-	TxFeatures      txprofile.TransactionFeatures // Layer 8 extracted transaction features
+	ForceCIBA         bool                          // true = any escalation layer (Drift, BlastRadius, DestructiveAction, TxProfile, CaMeL Taint) requires human sign-off
+	CIBAReasons       []string                      // aggregated reasons requiring CIBA sign-off
+	BlastEstimate     blastradius.Estimate          // Layer 7 blast-radius assessment
+	DestructiveAction hitl.DestructiveActionInfo    // Layer 7 destructive action classification
+	TxFeatures        txprofile.TransactionFeatures // Layer 8 extracted transaction features
 	TxProfileResult txprofile.ProfileResult       // Layer 8 multivariate & deontic rule assessment
 	TaintResult     taint.CapabilityResult        // Layer 9 CaMeL session taint assessment
 }
@@ -359,6 +361,13 @@ func Evaluate(ctx context.Context, req Request) PipelineResult {
 	// single-shot blast radius is high.
 	ctx7, span7 := tracer.Start(ctx, "pipeline.layer.blast_radius")
 	blastEst := blastradius.Analyze(req.EndpointCriticality, req.HTTPMethod, req.Body, req.TargetURL)
+	destructiveInfo := hitl.ClassifyDestructiveAction(req.HTTPMethod, req.TargetURL, req.Body)
+	if destructiveInfo.IsDestructive && (destructiveInfo.Severity == "critical" || destructiveInfo.Severity == "high") {
+		blastEst.ForceCIBA = true
+		if blastEst.Score < 0.75 {
+			blastEst.Score = 0.75
+		}
+	}
 	blastLayer := LayerResult{
 		Layer:   "blast_radius",
 		Blocked: false,
@@ -369,15 +378,22 @@ func Evaluate(ctx context.Context, req Request) PipelineResult {
 	span7.SetAttributes(
 		attribute.Bool("pipeline.blast_radius.force_ciba", blastEst.ForceCIBA),
 		attribute.Int("pipeline.blast_radius.estimated_records", blastEst.EstimatedRecords),
+		attribute.Bool("pipeline.destructive_action.detected", destructiveInfo.IsDestructive),
+		attribute.String("pipeline.destructive_action.type", destructiveInfo.ActionType),
 	)
 	span7.End()
 	_ = ctx7
 
 	result.BlastEstimate = blastEst
+	result.DestructiveAction = destructiveInfo
 	result.LayerResults = append(result.LayerResults, blastLayer)
 	if blastEst.ForceCIBA {
 		result.ForceCIBA = true
-		result.CIBAReasons = append(result.CIBAReasons, blastEst.Summary)
+		if destructiveInfo.IsDestructive {
+			result.CIBAReasons = append(result.CIBAReasons, fmt.Sprintf("%s (%s: %s)", blastEst.Summary, destructiveInfo.ActionType, destructiveInfo.ActionDescription))
+		} else {
+			result.CIBAReasons = append(result.CIBAReasons, blastEst.Summary)
+		}
 	}
 
 	// ── Layer 8: Multivariate Transaction Profiling & Deontic Never-Rules ─
