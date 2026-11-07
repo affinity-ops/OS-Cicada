@@ -1,4 +1,4 @@
-# Cicada: Zero-Trust Runtime Enforcement Gateway & Kernel Firewall for Autonomous AI Agents
+# Cicada: Zero-Trust Runtime Enforcement Gateway & EAKF Execution Sandbox for Autonomous AI Agents
 
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](./LICENSE)
 [![Go 1.26+](https://img.shields.io/badge/Go-1.26+-00ADD8.svg)](./Sentry_Gateway)
@@ -14,7 +14,7 @@
 
 ## The Core Mission
 
-Cicada was built because autonomous AI agents are running riot without network-level protections. Content-layer filtering (LLM-judging-LLM prompt wrappers) is probabilistic, adds seconds of latency, and fails under indirect prompt injection. **Cicada** introduces a **deterministic, sub-millisecond network, cryptographic, and kernel-level perimeter** around autonomous AI agents and Model Context Protocol (MCP) tool calls to prevent catastrophic autonomous failure loops, data exfiltration, and unauthorized execution.
+Cicada was built because autonomous AI agents are running riot without network-level protections. Content-layer filtering (LLM-judging-LLM prompt wrappers) is probabilistic, adds seconds of latency, and fails under indirect prompt injection. **Cicada** introduces a **deterministic, sub-millisecond network, cryptographic, and execution-sandbox perimeter** around autonomous AI agents and Model Context Protocol (MCP) tool calls to prevent autonomous failure loops, data exfiltration, and unauthorized execution.
 
 ---
 
@@ -79,7 +79,7 @@ curl -s -X POST http://localhost:8080/v1/agent/proxy \
   -d '{"leak":"Here is the production AWS key: AKIAIOSFODNN7EXAMPLE"}' | jq .
 ```
 
-#### Test 5: Zero-False-Positive `CICADA_CANARY_*` Honeytoken Trap + Auto-Quarantine (`403 Forbidden`)
+#### Test 5: Multi-Encoding `CICADA_CANARY_*` Honeytoken Trap + Auto-Quarantine (`403 Forbidden`)
 ```bash
 # 5a. Agent attempts to exfiltrate a planted CICADA_CANARY_* honeytoken (caught in raw, Base64, Hex, URL, or SHA-256 form) -> Blocked & Auto-Quarantined
 curl -s -X POST http://localhost:8080/v1/agent/proxy \
@@ -138,7 +138,7 @@ Labelled honestly so you know what you are getting:
 | :--- | :--- |
 | **Prompt-injection detection** | Pattern-based (deobfuscation + regex + DOM scan). Catches known phrasings and encodings; a reworded attack can get through. No deterministic filter fully solves this. |
 | **Bypass protection** | The gateway only protects traffic routed through it. Use `deploy/k8s/eakfd-networkpolicy.yaml` or equivalent egress rules so agents cannot call APIs directly. |
-| **Firecracker microVM sandbox** | Design only (`docs/EPHEMERAL_AGENT_KERNEL_FIREWALL.md` §7.3). `eakfd` runs code in a subprocess; gVisor/Kata isolation comes from your container runtime. |
+| **EAKF (`eakfd`) kernel isolation** | `eakfd` runs code in an isolated UNIX-socket subprocess with stripped env, ephemeral temp dir, and `.tfstate`/IP output scrubbing (`cmd/eakfd/main.go`). Kernel syscall interception (`gVisor`/`Kata`) and zero-egress lockdown come from running `eakfd` under a Kubernetes `RuntimeClass` + `deploy/k8s/eakfd-networkpolicy.yaml`. Bare-metal Firecracker microVMs (`docs/EPHEMERAL_AGENT_KERNEL_FIREWALL.md` §7.3) are design-only. |
 | **Post-quantum gossip signatures** | Implemented but opt-in: active only with `CICADA_GOSSIP_PEERS_CONFIG` and an ML-DSA-65 key. Otherwise gossip uses a shared HMAC secret. |
 | **SSO federation (OIDC/SAML role mapping)** | Not functional on a fresh install: its tables (`federation_providers`, `role_mappings`) are not created by the active migrations. |
 | **License tier limits** (max agents, mesh tier) | Not enforced. The license signature is verified, but tier fields are not applied. |
@@ -173,7 +173,7 @@ flowchart TD
     L6 --> L6B["6b. Multi-Encoding Canary Honeytoken Trap<br/>Raw/Base64/Hex/SHA-256 CICADA_CANARY_* -> Mesh Quarantine"]
     L6B --> L7["7. Deterministic Semantic Intent Engine<br/>Domain Taxonomy + Action-Verb Contradiction Matrix"]
     L7 --> L8["8. Velocity Breaker + In-Memory OPA Rego<br/>Sub-Millisecond Scope & Budget Evaluation"]
-    L8 --> L85["8.5. EAKF Kernel Firewall (eakfd)<br/>gVisor/Kata Subprocess + .tfstate/IP Scrubbing"]
+    L8 --> L85["8.5. EAKF Execution Sandbox (eakfd)<br/>UNIX-Socket Subprocess + .tfstate/IP Scrubbing"]
     L85 --> L9B["9b. Vault-Aware & Shannon Entropy Outbound DLP<br/>Known Secret Formats + Entropy Check + Encoded Vault Match"]
     L9B --> L9C["9c. ASI08 Multi-Agent Cascade Detector<br/>Cross-Agent Trace Propagation Breaker"]
     L9C --> L10["10. BYOK KMS Envelope Decryption & DialContext Pinning<br/>AES-256-GCM Just-In-Time Key Injection + Socket IP Pin"]
@@ -218,7 +218,7 @@ Cicada maps directly to the **OWASP Agentic Applications Top 10** in production 
 | **`ASI02`** | **Tool Misuse & Exploitation** | `pipeline/` (**Unified 9-layer admission across all 5 gateway handlers**), `policy/sanitizer.go` (**Meta's "Agents Rule of Two" `RULE_OF_TWO_TRIFECTA` registration gate**), `prerequisite/` (Fail-closed post-upstream prerequisite ordering), `toolscope/` + `blastradius/` + `txprofile/` (Server-side parameter, SQL/bulk blast radius & transaction anomaly bounds), `fga/` + `velocity/` (Impact-weighted circuit breaker) |
 | **`ASI03`** | **Identity & Privilege Abuse** | `auth/` (Ed25519 EVAR tokens, RFC 9449 DPoP sender-constrained proofs, RFC 8693 ID-JAG human-context binding), `session/` (JIT 15m tokens) |
 | **`ASI04`** | **Supply Chain & Schema Mutation** | `agentcache/` (**Server-side tool manifest resolution `ResolveToolForRequest`**, strict JSON Schema contract validation for declared skills, `X-Cicada-Memory-Action: flush` on mutation) |
-| **`ASI05`** | **Unexpected Code Execution** | `cmd/eakfd/` + `plugin/` (Ephemeral Agent Kernel Firewall over UNIX Domain Socket, gVisor/Kata isolation, `.tfstate`/RFC1918/IMDS output scrubbing) |
+| **`ASI05`** | **Unexpected Code Execution** | `cmd/eakfd/` + `plugin/` (Ephemeral Agent Kernel Firewall daemon over UNIX Domain Socket: isolated subprocess, stripped env, `.tfstate`/RFC1918/IMDS output scrubbing; pairs with Kubernetes `gVisor`/`Kata` runtime) |
 | **`ASI06`** | **Memory & Context Poisoning** | `llmproxy/` + `taint/` (Stateless session memory isolation, `role: "tool"` / RAG provenance taint propagation, reasoning trace `<thinking>` audit, automatic context flush headers) |
 | **`ASI07`** | **Insecure Inter-Agent Communication** | `chain/` (Ed25519-signed `X-Cicada-Agent-Chain` hop verification, delegation depth cap, allowed-upstream lineage enforcement) |
 | **`ASI08`** | **Cascading Hallucination / Failures** | `cascade/` (Cross-agent response trace-ID propagation detector, MCP session hash verification) |
@@ -237,7 +237,7 @@ After replacing per-request PostgreSQL lookups on the hot path with a `singlefli
 | **95th Percentile (p95)** | `1,610.0 ms` | **`19.01 ms`** | **84x faster** |
 | **99th Percentile (p99)** | `2,510.0 ms` | **`50.94 ms`** | **49x faster** |
 | **Standalone In-Memory Gate Check** | N/A | **`0.02 ms – 1.15 ms`** | **Sub-millisecond** |
-| **Unexpected 5xx / Socket Errors** | `0.12%` | **`0.00%` (7,472 / 7,472 reqs)** | **100% reliability** |
+| **Unexpected 5xx / Socket Errors** | `0.12%` | **`0.00%` (7,472 / 7,472 reqs)** | **0 failed requests** |
 
 ---
 
@@ -254,16 +254,16 @@ The formal mathematical proofs behind Cicada's zero-trust enforcement model, non
 
 ## Repository Structure & Services
 
-While `Sentry_Gateway` can run completely standalone as a single Go binary, the repository includes the full multi-service governance fleet:
+`Sentry_Gateway` runs standalone or alongside `Core_API`, PostgreSQL, and Redis. The repository also includes the surrounding control-plane, UI, and companion services:
 
 | Directory | Service Description | Technology Stack |
 | :--- | :--- | :--- |
-| **[`Sentry_Gateway`](./Sentry_Gateway)** | Sub-millisecond zero-trust proxy, 15-stage MEF engine & `eakfd` kernel firewall | Go 1.26 (`chi`, `OPA`, `pgxpool`, `circl` PQC, `modernc/sqlite`) |
+| **[`Sentry_Gateway`](./Sentry_Gateway)** | Runtime enforcement proxy, 15-stage MEF engine & `eakfd` execution sandbox daemon | Go 1.26 (`chi`, `OPA`, `pgxpool`, `circl` PQC, `modernc/sqlite`) |
 | **[`Core_API`](./Core_API)** | Multi-tenant control plane, RBAC, CIBA backchannel & threat intelligence API | PHP 8.3 / Laravel 11 / PostgreSQL |
-| **[`dashboard`](./dashboard)** | Operator Command Center (ZTNA posture, live threat radar, CIBA holds, Aegis AI) | Next.js / TypeScript / React |
-| **[`Developer_Portal`](./Developer_Portal)** | Self-service agent scaffolding (`cicada.yaml`), EVAR minting & Policy Simulator | Next.js / TypeScript / React |
-| **[`Gateway_Portal`](./Gateway_Portal)** | Edge appliance onboarding, license status & node telemetry viewer | Next.js / TypeScript / React |
-| **[`Master_Admin_Panel`](./Master_Admin_Panel)** | Sovereign fleet administration, hardware passkey auth & tenant oversight | Next.js / TypeScript / React |
+| **[`dashboard`](./dashboard)** | Operator Command Center UI (posture, threat feed, CIBA holds, Aegis AI) | Next.js / TypeScript / React |
+| **[`Developer_Portal`](./Developer_Portal)** | Developer UI for agent scaffolding (`cicada.yaml`), EVAR minting & Policy Simulator | Next.js / TypeScript / React |
+| **[`Gateway_Portal`](./Gateway_Portal)** | Gateway onboarding, license status & node telemetry UI | Next.js / TypeScript / React |
+| **[`Master_Admin_Panel`](./Master_Admin_Panel)** | Fleet administration, passkey auth & tenant management UI | Next.js / TypeScript / React |
 | **[`Ciba_Flutter_App`](./Ciba_Flutter_App)** | **Aegis** mobile companion for biometric CIBA approvals & ECIES payload decryption | Flutter / Dart (iOS & Android) |
 | **[`sentinel_flutter_app`](./sentinel_flutter_app)** | **Sentinel** mobile field verification & cryptographic agent introspection app | Flutter / Dart |
 | **[`Shadow_Sandbox`](./Shadow_Sandbox)** | Ghost Mode deception honeypot & behavioral anomaly profiler | Go |
