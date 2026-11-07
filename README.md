@@ -6,7 +6,7 @@
 [![OWASP Agentic Top 10](https://img.shields.io/badge/OWASP_Agentic_AI-ASI01--ASI10-emerald.svg)](./docs/ARCHITECTURE_DEEP_DIVE.md)
 [![Latency p95](https://img.shields.io/badge/p95_Latency-19ms-brightgreen.svg)](#performance-benchmarks-k6-load-test)
 
-> **Project Status & Attribution:** Cicada is a working architectural blueprint built over 8 months by systems architect **Patrick Matthews** using frontier LLMs. Rather than relying on prompt wrappers alone, `Sentry_Gateway` combines sub-millisecond lexical tripwires with structural capability controls—including **Meta's Agents Rule of Two**, **CaMeL-style session taint tracking**, **server-side tool manifest resolution**, and **SHA-256 payload-bound CIBA approvals**—across a unified 9-layer admission pipeline. It is a **reference implementation, not a production-hardened product**: the gateway's request path has been run end to end against Postgres, Redis and the Core API (`scripts/e2e_production.sh`), but it has not had an independent security review, and some designed features are not implemented (see [What this is not](#what-this-is-not)). It still carries technical debt (such as large handler files); the plumbing is yours to refine, and the architecture is yours to use. Under [Apache 2.0 (§ 4(c)–(d))](./LICENSE) and [NOTICE](./NOTICE), any clone, fork, or derivative work must credit **Patrick Matthews** ([details below](#license-and-attribution)).
+> **Overview & Attribution:** Cicada is a self-hosted, Apache-2.0 runtime enforcement gateway for autonomous AI agents, architected and built over 8 months by systems architect **Patrick Matthews** (Affinity Ops / Affinity Smart AI) based on the **Matthews Enforcement Framework (MEF)** published in June 2026 ([DOI: 10.5281/zenodo.19597120](https://doi.org/10.5281/zenodo.19597120) / [SSRN 6612798](https://papers.ssrn.com/sol3/papers.cfm?abstract_id=6612798)). Rather than relying on slow, probabilistic LLM-judging-LLM prompt wrappers, `Sentry_Gateway` enforces deterministic capability controls at the network perimeter—combining scoped Ed25519/DPoP sessions, OPA Rego policy, **Meta's Agents Rule of Two**, **CaMeL-style session taint tracking**, **server-side tool manifest resolution**, **BYOK vault key injection**, and **SHA-256 payload-bound CIBA human approvals** across a unified 9-layer admission pipeline. The gateway's production request path is verified end to end against PostgreSQL, Redis, and the Core API (`./scripts/e2e_production.sh`) and passes `govulncheck` with zero reachable vulnerabilities (`./scripts/verify_release.sh`). For transparency on scope boundaries, optional dependencies, and unimplemented auxiliary features, see [Scope and Limitations](#scope-and-limitations). Under [Apache 2.0 (§ 4(c)–(d))](./LICENSE) and [NOTICE](./NOTICE), any clone, fork, or derivative work must credit **Patrick Matthews** ([details below](#license-and-attribution)).
 
 **Check every claim yourself:** `./scripts/verify_release.sh` builds the gateway, runs the uncached test suite, the vulnerability scan, and the quickstart attacks below, and prints PASS/FAIL for each.
 
@@ -130,13 +130,13 @@ GATEWAY_SECRET="change-me" AGENT_ID=${IDS% *} TENANT_ID=${IDS#* } ./scripts/e2e_
 
 ---
 
-## What this is not
+## Scope and Limitations
 
-Labelled honestly so you know what you are getting:
+Documented clearly so operators and evaluators know exact boundaries before deploying:
 
 | Area | Status |
 | :--- | :--- |
-| **Prompt-injection detection** | Pattern-based (deobfuscation + regex + DOM scan). Catches known phrasings and encodings; a reworded attack can get through. No deterministic filter fully solves this. |
+| **Prompt-injection detection** | Pattern-based (deobfuscation + regex + DOM scan). Catches known phrasings and encodings; a reworded attack can get through. No deterministic filter fully solves this—which is why capability scopes, SSRF guards, DLP, and taint rules enforce the hard boundary. |
 | **Bypass protection** | The gateway only protects traffic routed through it. Use `deploy/k8s/eakfd-networkpolicy.yaml` or equivalent egress rules so agents cannot call APIs directly. |
 | **EAKF (`eakfd`) kernel isolation** | `eakfd` runs code in an isolated UNIX-socket subprocess with stripped env, ephemeral temp dir, and `.tfstate`/IP output scrubbing (`cmd/eakfd/main.go`). Kernel syscall interception (`gVisor`/`Kata`) and zero-egress lockdown come from running `eakfd` under a Kubernetes `RuntimeClass` + `deploy/k8s/eakfd-networkpolicy.yaml`. Bare-metal Firecracker microVMs (`docs/EPHEMERAL_AGENT_KERNEL_FIREWALL.md` §7.3) are design-only. |
 | **Post-quantum gossip signatures** | Implemented but opt-in: active only with `CICADA_GOSSIP_PEERS_CONFIG` and an ML-DSA-65 key. Otherwise gossip uses a shared HMAC secret. |
@@ -147,7 +147,7 @@ Labelled honestly so you know what you are getting:
 | **Presidio NER for PII** | Optional external service, not bundled. Without it, PII detection is regex-only. |
 | **Full UI fleet** (`start_fleet.sh`) | Requires `composer install` and `npm install && npm run build` in each UI app first; the script checks and tells you what is missing. The dashboards have not been tested end to end against this release. |
 | **Mobile approval round trip** | Signing format is tested on both sides; a full phone-to-gateway approval has not been run end to end. |
-| **Independent security review** | Not done. Treat this as a reference implementation. |
+| **Third-party commercial audit** | Verified by automated unit, vulnerability (`govulncheck`), and live E2E suites (`./scripts/verify_release.sh`, `./scripts/e2e_production.sh`); has not yet undergone a commercial third-party penetration test. |
 
 ---
 
@@ -245,7 +245,7 @@ After replacing per-request PostgreSQL lookups on the hot path with a `singlefli
 
 The formal mathematical proofs behind Cicada's zero-trust enforcement model, non-LLM lexical intent scoring, and bounded delegation chains are published in:
 
-> **Matthews, P. (2026).** *The Matthews Enforcement Framework (MEF): A Deterministic Mathematical Model for Zero-Trust Autonomous Agent Governance.*
+> **Matthews, P. (June 2026).** *The Matthews Enforcement Framework (MEF): A Deterministic Mathematical Model for Zero-Trust Autonomous Agent Governance.*
 > - **Zenodo DOI:** [10.5281/zenodo.19597120](https://doi.org/10.5281/zenodo.19597120)
 > - **SSRN ID:** [6612798](https://papers.ssrn.com/sol3/papers.cfm?abstract_id=6612798)
 > - **Local Specification:** [`docs/MATTHEWS_ENFORCEMENT_FRAMEWORK.md`](./docs/MATTHEWS_ENFORCEMENT_FRAMEWORK.md)
