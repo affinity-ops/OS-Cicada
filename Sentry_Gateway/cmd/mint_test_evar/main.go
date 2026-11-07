@@ -1,3 +1,6 @@
+// © 2026 Patrick Matthews (Affinity Ops / Affinity Smart AI)
+// SPDX-License-Identifier: Apache-2.0
+
 // Quick utility to mint a test EVAR for k6 load testing.
 package main
 

@@ -153,9 +153,9 @@ Header spoofing (`X-Real-IP`) and gossip authentication cannot be tested from lo
 
 | Item | Status |
 | :--- | :--- |
-| SSO federation (OIDC/SAML role mapping) | **Resolved in v1.0.1:** `federation_providers`, `federated_sessions`, `federation_audit_log`, and `role_mappings` tables are now created automatically by `active_migrations/001_isolated_schema.sql` on fresh installs. |
-| License tier limits (`GetMaxAgents`, `MeshAllowed`, `GetMeshTier`) | **Resolved in v1.0.1:** `GetMaxAgents()` is enforced during agent registration (`registration_authz.go`) and `MeshAllowed()` is enforced on `/v1/gossip/receive` when a license is active. |
-| Canary token issuing (`canary.Issue` / `Revoke`) | **Resolved in v1.0.1:** Wired to authenticated operator endpoints `POST /v1/admin/canary/issue` and `POST /v1/admin/canary/revoke` with both Redis persistence and standalone in-memory fallback. |
+| SSO federation (OIDC/SAML role mapping) | **Resolved in v1.0.2:** `federation_providers`, `federated_sessions`, `federation_audit_log`, and `role_mappings` tables are now created automatically by `active_migrations/001_isolated_schema.sql` on fresh installs. |
+| License tier limits (`GetMaxAgents`, `MeshAllowed`, `GetMeshTier`) | **Resolved in v1.0.2:** `GetMaxAgents()` is enforced during agent registration (`registration_authz.go`) and `MeshAllowed()` is enforced on `/v1/gossip/receive` when a license is active. |
+| Canary token issuing (`canary.Issue` / `Revoke`) | **Resolved in v1.0.2:** Wired to authenticated operator endpoints `POST /v1/admin/canary/issue` and `POST /v1/admin/canary/revoke` with both Redis persistence and standalone in-memory fallback. |
 | Firecracker microVM orchestration | Design only (host container runtime supplies `gVisor`/`Kata` syscall isolation). |
 | Full UI fleet and mobile approval round trip | Not tested end to end against this release. |
 | Independent security review | Not performed. |

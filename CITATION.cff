@@ -11,7 +11,7 @@ repository-code: "https://github.com/affinity-ops/OS-Cicada"
 url: "https://doi.org/10.5281/zenodo.19597120"
 doi: "10.5281/zenodo.19597120"
 license: Apache-2.0
-version: "1.0.1"
+version: "1.0.2"
 date-released: "2026-04-16"
 keywords:
   - ai-agents

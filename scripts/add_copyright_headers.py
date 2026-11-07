@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
+# © 2026 Patrick Matthews (Affinity Ops / Affinity Smart AI)
+# SPDX-License-Identifier: Apache-2.0
 """
-Add copyright headers to all proprietary source files in the Cicada project.
+Add Apache-2.0 SPDX copyright headers to all source files in the Cicada project.
 Run from the project root:  python3 scripts/add_copyright_headers.py
 
 Headers are NOT added to:
@@ -85,9 +87,9 @@ def should_exclude(dir_path, root):
 def has_header(content, header):
     """Check if the first N chars contain the header (handles shebang, <?php, etc.)"""
     first_line = content.lstrip().split('\n')[0]
-    # Check for any line containing "Affinity Ops" or "Proprietary"
+    # Check for any line containing "Affinity Ops" or "SPDX-License-Identifier"
     for line in content.split('\n')[:10]:
-        if "Affinity Ops" in line or "Proprietary and confidential" in line:
+        if "Affinity Ops" in line or "SPDX-License-Identifier" in line:
             return True
     return False
 

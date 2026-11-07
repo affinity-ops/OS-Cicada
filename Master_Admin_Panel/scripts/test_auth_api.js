@@ -1,3 +1,6 @@
+// © 2026 Patrick Matthews (Affinity Ops / Affinity Smart AI)
+// SPDX-License-Identifier: Apache-2.0
+
 const http = require('http');
 const crypto = require('crypto');
 const fs = require('fs');

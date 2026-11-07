@@ -1,3 +1,6 @@
+// © 2026 Patrick Matthews (Affinity Ops / Affinity Smart AI)
+// SPDX-License-Identifier: Apache-2.0
+
 /**
  * Cicada Sentry Gateway — k6 Load Test Suite
  *

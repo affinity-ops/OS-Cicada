@@ -1,5 +1,9 @@
 <?php
 /**
+ * © 2026 Patrick Matthews (Affinity Ops / Affinity Smart AI)
+ * SPDX-License-Identifier: Apache-2.0
+ */
+/**
  * V09 Token-IP Correlation Table.
  *
  * Lightweight log of (agent, source_ip) pairs written by the Sentry Gateway
