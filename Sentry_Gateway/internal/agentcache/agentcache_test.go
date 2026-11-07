@@ -178,3 +178,38 @@ func TestResolveToolForRequest_Hardened(t *testing.T) {
 	}
 }
 
+func TestResolveToolForRequest_ExplicitURLPatternBinding(t *testing.T) {
+	tools := []ToolManifestEntry{
+		{
+			ToolID:     "billing:read_invoice",
+			ToolScope:  "read",
+			URLPattern: "https://api.stripe.com/v1/invoices/*",
+		},
+		{
+			ToolID:               "billing:void_invoice",
+			ToolScope:            "write",
+			RequiresPreviousTool: "billing:read_invoice",
+			URLPattern:           "https://api.stripe.com/v1/invoices/*/void",
+		},
+	}
+
+	// 1. Exact URL pattern match resolves the more specific void endpoint
+	id, _, _ := ResolveToolForRequest(tools, "", "https://api.stripe.com/v1/invoices/in_123/void?reason=dup", "POST")
+	if id != "billing:void_invoice" {
+		t.Fatalf("expected URL pattern match to resolve billing:void_invoice, got %q", id)
+	}
+
+	// 2. Different host with "/v1/invoices/in_123" must NOT match when full URLPattern specifies api.stripe.com
+	unmatchedID, _, _ := ResolveToolForRequest(tools, "", "https://evil.example.com/v1/invoices/in_123", "GET")
+	if unmatchedID != "" {
+		t.Fatalf("expected empty toolID when host does not match explicit URLPattern, got %q", unmatchedID)
+	}
+
+	// 3. Client claiming billing:read_invoice against an unmatched host is rejected because URLPattern is enforced
+	spoofedHostID, _, _ := ResolveToolForRequest(tools, "billing:read_invoice", "https://evil.example.com/v1/invoices/in_123", "GET")
+	if spoofedHostID != "" {
+		t.Fatalf("expected empty toolID when client claims tool against non-matching URLPattern host, got %q", spoofedHostID)
+	}
+}
+
+

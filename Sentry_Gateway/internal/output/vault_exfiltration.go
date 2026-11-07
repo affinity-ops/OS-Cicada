@@ -1,5 +1,5 @@
 // © 2026 Patrick Matthews (Affinity Ops / Affinity Smart AI)
-// Proprietary and confidential. Unauthorized copying or distribution prohibited.
+// SPDX-License-Identifier: Apache-2.0
 
 // Package output — vault-aware exfiltration defence.
 //

@@ -173,12 +173,13 @@ type FGAPolicy struct {
 }
 
 // ToolManifestEntry represents a registered tool from the agent_tools table,
-// providing server-side tool scope and Forward-Saga prerequisite bindings.
+// providing server-side tool scope, optional URL pattern, and Forward-Saga prerequisite bindings.
 type ToolManifestEntry struct {
 	ToolID               string `json:"tool_id"`
 	ToolName             string `json:"tool_name"`
 	ToolScope            string `json:"tool_scope"`
 	RequiresPreviousTool string `json:"requires_previous_tool"`
+	URLPattern           string `json:"url_pattern,omitempty"` // optional URL/path glob (e.g. "https://api.stripe.com/v1/refunds*" or "/v1/volumes/*/delete")
 }
 
 // cacheKeyAgent returns the Redis key for an agent's metadata hash.
@@ -694,7 +695,25 @@ func ResolveToolForRequest(tools []ToolManifestEntry, clientToolID, targetURL, h
 	}
 
 	pathSegs := extractCanonicalPathSegments(targetURL)
+	canonicalFull, canonicalPath := canonicalizeTargetURL(targetURL)
 	methodUpper := strings.ToUpper(strings.TrimSpace(httpMethod))
+
+	toolByID := make(map[string]ToolManifestEntry, len(tools))
+	for _, t := range tools {
+		toolByID[t.ToolID] = t
+	}
+
+	scoreEntry := func(t ToolManifestEntry) int {
+		if patScore := scoreToolURLPattern(t.URLPattern, canonicalFull, canonicalPath); patScore > 0 {
+			return patScore
+		}
+		// If the tool declares an explicit URLPattern and the request does NOT match it,
+		// do not fall back to loose path-word matching for that tool.
+		if strings.TrimSpace(t.URLPattern) != "" {
+			return 0
+		}
+		return scoreToolAgainstPathSegments(t.ToolID, pathSegs)
+	}
 
 	bestCompatibleID := ""
 	bestCompatibleScore := 0
@@ -704,7 +723,7 @@ func ResolveToolForRequest(tools []ToolManifestEntry, clientToolID, targetURL, h
 	bestAnyScore := 0
 
 	for _, t := range tools {
-		score := scoreToolAgainstPathSegments(t.ToolID, pathSegs)
+		score := scoreEntry(t)
 		if score <= 0 {
 			continue
 		}
@@ -725,7 +744,17 @@ func ResolveToolForRequest(tools []ToolManifestEntry, clientToolID, targetURL, h
 	trimmedClient := strings.TrimSpace(clientToolID)
 	if trimmedClient != "" {
 		// Reject unknown client tool IDs immediately (fail-closed in pipeline).
-		if _, exists := prereqMap[trimmedClient]; !exists {
+		clientEntry, exists := toolByID[trimmedClient]
+		if !exists {
+			return "", prereqMap, scopeMap
+		}
+		// If the claimed tool defines an explicit URLPattern and the target URL does not match it,
+		// reject or override with the URL-matched tool.
+		clientScore := scoreEntry(clientEntry)
+		if strings.TrimSpace(clientEntry.URLPattern) != "" && clientScore == 0 {
+			if bestCompatibleID != "" {
+				return bestCompatibleID, prereqMap, scopeMap
+			}
 			return "", prereqMap, scopeMap
 		}
 		// Prevent header spoofing: if the client header claims a tool whose scope is
@@ -734,7 +763,6 @@ func ResolveToolForRequest(tools []ToolManifestEntry, clientToolID, targetURL, h
 		// the server-inferred method-compatible tool.
 		if bestCompatibleID != "" && bestCompatibleID != trimmedClient {
 			clientCompatible := isScopeCompatibleWithMethod(scopeMap[trimmedClient], methodUpper)
-			clientScore := scoreToolAgainstPathSegments(trimmedClient, pathSegs)
 			if !clientCompatible || (bestCompatibleHasPrereq && clientScore <= bestCompatibleScore) {
 				return bestCompatibleID, prereqMap, scopeMap
 			}
@@ -756,6 +784,86 @@ func ResolveToolForRequest(tools []ToolManifestEntry, clientToolID, targetURL, h
 
 	// No tool resolved from manifest -> pipeline.Evaluate will deny fail-closed.
 	return "", prereqMap, scopeMap
+}
+
+func canonicalizeTargetURL(rawURL string) (fullNoQuery, pathOnly string) {
+	trimmed := strings.TrimSpace(rawURL)
+	if trimmed == "" {
+		return "", ""
+	}
+	if parsed, err := url.Parse(trimmed); err == nil && (parsed.Host != "" || parsed.Path != "") {
+		pathOnly = strings.ToLower(strings.TrimSuffix(parsed.Path, "/"))
+		if pathOnly == "" {
+			pathOnly = "/"
+		}
+		if parsed.Host != "" {
+			scheme := strings.ToLower(parsed.Scheme)
+			if scheme == "" {
+				scheme = "https"
+			}
+			fullNoQuery = scheme + "://" + strings.ToLower(parsed.Host) + pathOnly
+		} else {
+			fullNoQuery = pathOnly
+		}
+		return fullNoQuery, pathOnly
+	}
+	if idx := strings.IndexAny(trimmed, "?#"); idx >= 0 {
+		trimmed = trimmed[:idx]
+	}
+	clean := strings.ToLower(strings.TrimSuffix(trimmed, "/"))
+	return clean, clean
+}
+
+// scoreToolURLPattern matches an explicit tool URL/path glob against the
+// canonical target URL (with query and fragment stripped). Returns >= 100 on
+// match so explicit URL patterns always take precedence over heuristic path
+// segment matching.
+func scoreToolURLPattern(pattern, canonicalFull, canonicalPath string) int {
+	pat := strings.ToLower(strings.TrimSpace(pattern))
+	if pat == "" || canonicalPath == "" {
+		return 0
+	}
+	if idx := strings.IndexAny(pat, "?#"); idx >= 0 {
+		pat = pat[:idx]
+	}
+	pat = strings.TrimSuffix(pat, "/")
+	if pat == "" {
+		pat = "/"
+	}
+
+	target := canonicalFull
+	if strings.HasPrefix(pat, "/") {
+		target = canonicalPath
+	}
+
+	if wildcardMatch(pat, target) {
+		nonWild := len(strings.ReplaceAll(pat, "*", ""))
+		return 100 + nonWild
+	}
+	return 0
+}
+
+func wildcardMatch(pattern, str string) bool {
+	if pattern == "*" {
+		return true
+	}
+	parts := strings.Split(pattern, "*")
+	if len(parts) == 1 {
+		return pattern == str
+	}
+	if !strings.HasPrefix(str, parts[0]) {
+		return false
+	}
+	str = str[len(parts[0]):]
+	for i := 1; i < len(parts)-1; i++ {
+		idx := strings.Index(str, parts[i])
+		if idx < 0 {
+			return false
+		}
+		str = str[idx+len(parts[i]):]
+	}
+	last := parts[len(parts)-1]
+	return strings.HasSuffix(str, last)
 }
 
 func extractCanonicalPathSegments(rawURL string) map[string]bool {
