@@ -258,11 +258,23 @@ func Evaluate(ctx context.Context, req Request) PipelineResult {
 	// tool call. Example: "storage:delete_volume" requires "storage:verify_backup"
 	// to have been executed successfully within the last 10 minutes.
 	//
-	// Unlike drift (which flags), prerequisite BLOCKS. A broken action chain
-	// means the agent skipped a safety step — there is no ambiguity to escalate.
-	if req.ToolID != "" && req.PrerequisiteMap != nil {
+	// Fail-closed rule: if the agent has a registered prerequisite/tool manifest
+	// (len(req.PrerequisiteMap) > 0 || len(req.ToolScopeMap) > 0) and no declared
+	// tool resolved from the request (req.ToolID == "" or not in the manifest),
+	// the request is denied rather than skipping Layers 5 and 6.
+	if len(req.PrerequisiteMap) > 0 {
 		ctx5, span5 := tracer.Start(ctx, "pipeline.layer.prerequisite")
-		preResult := prerequisite.CheckDeterministic(req.ToolID, req.PrerequisiteMap, req.LedgerCheckFn)
+		_, inManifest := req.PrerequisiteMap[req.ToolID]
+		var preResult prerequisite.Result
+		if req.ToolID == "" || !inManifest {
+			preResult = prerequisite.Result{
+				Passed: false,
+				ToolID: req.ToolID,
+				Reason: fmt.Sprintf("UNREGISTERED TOOL: agent has a registered tool manifest, but request (%s %s, tool_id=%q) did not resolve to any declared tool", req.HTTPMethod, req.TargetURL, req.ToolID),
+			}
+		} else {
+			preResult = prerequisite.CheckDeterministic(req.ToolID, req.PrerequisiteMap, req.LedgerCheckFn)
+		}
 		preLayer := LayerResult{
 			Layer:   "prerequisite",
 			Blocked: !preResult.Passed,
@@ -275,10 +287,14 @@ func Evaluate(ctx context.Context, req Request) PipelineResult {
 
 		result.LayerResults = append(result.LayerResults, preLayer)
 		if !preResult.Passed {
+			blockedBy := "prerequisite"
+			if req.ToolID == "" || !inManifest {
+				blockedBy = "tool_scope"
+			}
 			result.Admitted = false
-			result.BlockedBy = "prerequisite"
+			result.BlockedBy = blockedBy
 			result.BlockReason = preResult.Reason
-			pipelineSpan.SetAttributes(attribute.String("pipeline.blocked_by", "prerequisite"))
+			pipelineSpan.SetAttributes(attribute.String("pipeline.blocked_by", blockedBy))
 			pipelineSpan.SetStatus(codes.Error, "blocked: "+preResult.Reason)
 			return result
 		}
@@ -293,10 +309,20 @@ func Evaluate(ctx context.Context, req Request) PipelineResult {
 	// Why this is separate from semantic intent: semantic checks whether the
 	// call makes sense for the agent's purpose. Tool scope checks whether the
 	// specific tool is allowed to use this HTTP method.
-	if req.ToolID != "" && req.ToolScopeMap != nil {
+	if len(req.ToolScopeMap) > 0 {
 		ctx6, span6 := tracer.Start(ctx, "pipeline.layer.tool_scope")
-		scope := req.ToolScopeMap[req.ToolID]
-		scopeResult := toolscope.Check(req.ToolID, scope, req.HTTPMethod)
+		scope, inScopeManifest := req.ToolScopeMap[req.ToolID]
+		var scopeResult toolscope.Result
+		if req.ToolID == "" || !inScopeManifest {
+			scopeResult = toolscope.Result{
+				Passed:     false,
+				ToolID:     req.ToolID,
+				HTTPMethod: req.HTTPMethod,
+				Reason:     fmt.Sprintf("UNREGISTERED TOOL: agent has a registered tool scope manifest, but request (%s %s, tool_id=%q) did not resolve to any declared tool", req.HTTPMethod, req.TargetURL, req.ToolID),
+			}
+		} else {
+			scopeResult = toolscope.Check(req.ToolID, scope, req.HTTPMethod)
+		}
 		scopeLayer := LayerResult{
 			Layer:   "tool_scope",
 			Blocked: !scopeResult.Passed,

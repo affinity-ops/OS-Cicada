@@ -189,7 +189,8 @@ func HasCompletedPrerequisite(ctx context.Context, agentID, prerequisiteToolID s
 				completedStore.Store(prereqMemKey(agentID, prerequisiteToolID), ts)
 				return true, nil
 			}
-			return true, nil
+			// Expired or unparseable timestamp in Redis — evict and do not treat as completed.
+			_ = queue.Client.Del(ctx, prereqRedisKey(agentID, prerequisiteToolID)).Err()
 		}
 	}
 

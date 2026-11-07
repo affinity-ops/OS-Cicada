@@ -7,6 +7,7 @@ import (
 	"context"
 	"os"
 	"testing"
+	"time"
 )
 
 // ── Forward Saga: Prerequisite Enforcement ────────────────────────────────────
@@ -266,3 +267,18 @@ func TestCheck_FailsClosedWhenDBUnavailable(t *testing.T) {
 		t.Error("Check must fail closed (Passed=false) when DB is unavailable and CICADA_FAIL_CLOSED=true")
 	}
 }
+
+func TestHasCompletedPrerequisite_RejectsExpiredTimestamp(t *testing.T) {
+	ctx := context.Background()
+	agentID := "agent-expired-prereq"
+	toolID := "storage:verify_backup"
+
+	// Store a timestamp 30 minutes in the past (outside the 10-minute default window)
+	completedStore.Store(prereqMemKey(agentID, toolID), time.Now().UTC().Add(-30*time.Minute))
+
+	done, _ := HasCompletedPrerequisite(ctx, agentID, toolID)
+	if done {
+		t.Error("HasCompletedPrerequisite must reject expired completion timestamps outside the window")
+	}
+}
+

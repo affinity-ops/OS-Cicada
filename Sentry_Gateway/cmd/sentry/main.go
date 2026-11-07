@@ -2278,9 +2278,13 @@ func handleAgentRequest(w http.ResponseWriter, r *http.Request) {
 	// Resolve tool identity, prerequisite chain, and atomic scope from the
 	// server-side agent_tools manifest rather than trusting client headers alone.
 	clientToolID := r.Header.Get("X-Cicada-Tool-ID")
-	agentTools, _ := agentcache.GetTools(r.Context(), agentID)
+	agentTools, toolsErr := agentcache.GetTools(r.Context(), agentID)
 	resolvedToolID, prereqMap, scopeMap := agentcache.ResolveToolForRequest(agentTools, clientToolID, targetURL, r.Method)
-	if prereqMap == nil && resolvedToolID != "" && store.DB != nil {
+	if toolsErr != nil && store.DB != nil && os.Getenv("CICADA_FAIL_CLOSED") != "false" {
+		log.Printf("[AGENTCACHE] Tool manifest lookup failed for agent %s: %v (FAILING CLOSED)", agentID, toolsErr)
+		prereqMap = map[string]string{"__manifest_unavailable__": "__lookup_failed__"}
+		resolvedToolID = ""
+	} else if prereqMap == nil && resolvedToolID != "" && store.DB != nil {
 		if tp, tpErr := prerequisite.LookupToolPrerequisite(r.Context(), agentID, resolvedToolID); tpErr == nil && tp != nil {
 			prereqMap = map[string]string{tp.ToolID: tp.RequiresPreviousTool}
 			scopeMap = map[string]string{tp.ToolID: tp.ToolScope}
@@ -2914,7 +2918,7 @@ func handleAgentRequest(w http.ResponseWriter, r *http.Request) {
 			ActionClass:   actionScope, Decision: "dry_run_passed",
 			PolicyVersion: "v1.4.2", ReasonCodes: []string{"policy_passed_simulated"}, RiskScore: 0.0,
 		})
-		
+
 		writeJSON(w, http.StatusOK, map[string]any{
 			"status":   "dry_run_passed",
 			"message":  "The request passed all Cicada policy and verification checks successfully. It was NOT forwarded to the target API.",
@@ -3015,10 +3019,11 @@ func handleAgentRequest(w http.ResponseWriter, r *http.Request) {
 		}
 		go recordAgentTxSuccess(context.Background(), agentID, pipeRes.TxFeatures)
 	}
-	// CaMeL taint propagation: reading external data via GET or untrusted provenance
-	// marks the agent session tainted so subsequent state mutations require CIBA.
-	if r.Method == http.MethodGet || taint.IsUntrustedProvenance(provenanceHdr) {
-		taint.MarkTainted(r.Context(), agentID, "proxy:"+r.Method+":"+targetURL, "ingested external API response")
+	// CaMeL taint propagation: reading from an untrusted external domain via GET
+	// or carrying untrusted provenance marks the agent session tainted so
+	// subsequent state mutations require CIBA. Trusted internal domains do not taint.
+	if (r.Method == http.MethodGet && taint.ShouldTaintOnRead(targetURL, provenanceHdr)) || taint.IsUntrustedProvenance(provenanceHdr) {
+		taint.MarkTainted(r.Context(), agentID, "proxy:"+r.Method+":"+targetURL, "ingested untrusted external API response")
 	}
 
 	edgeLedger.AppendRecord(ledger.EventRecord{
@@ -3521,10 +3526,58 @@ func handleMCPExecution(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	mcpBodyBytes, err := io.ReadAll(io.LimitReader(r.Body, 2*1024*1024))
+	if err != nil {
+		writeError(w, `{"error":"failed to read MCP payload"}`, http.StatusBadRequest)
+		return
+	}
+	r.Body.Close()
+
 	var call MCPToolCall
-	if err := json.NewDecoder(r.Body).Decode(&call); err != nil {
+	if err := json.Unmarshal(mcpBodyBytes, &call); err != nil {
 		writeError(w, `{"error":"invalid MCP tool payload"}`, http.StatusBadRequest)
 		return
+	}
+
+	mcpCallerAgent := r.Header.Get("X-Cicada-Agent-ID")
+	if mcpCallerAgent == "" {
+		mcpCallerAgent = "aegis-mcp-caller"
+	}
+	mcpTools, mcpToolsErr := agentcache.GetTools(r.Context(), mcpCallerAgent)
+	mcpResolvedTool, mcpPrereqMap, mcpScopeMap := agentcache.ResolveToolForRequest(
+		mcpTools,
+		call.ToolName,
+		r.Header.Get("X-Cicada-Target-URL"),
+		r.Method,
+	)
+	if mcpToolsErr != nil && store.DB != nil && os.Getenv("CICADA_FAIL_CLOSED") != "false" {
+		mcpPrereqMap = map[string]string{"__manifest_unavailable__": "__lookup_failed__"}
+		mcpResolvedTool = ""
+	}
+	mcpPipeRes := pipeline.Evaluate(r.Context(), pipeline.Request{
+		AgentID:         mcpCallerAgent,
+		TenantID:        r.Header.Get("X-Cicada-Tenant-ID"),
+		HTTPMethod:      r.Method,
+		TargetURL:       r.Header.Get("X-Cicada-Target-URL"),
+		Body:            string(mcpBodyBytes),
+		Provenance:      r.Header.Get("X-Cicada-Content-Provenance"),
+		ToolID:          mcpResolvedTool,
+		PrerequisiteMap: mcpPrereqMap,
+		LedgerCheckFn: func(reqTool string) bool {
+			if reqTool == "__lookup_failed__" {
+				return false
+			}
+			done, _ := prerequisite.HasCompletedPrerequisite(r.Context(), mcpCallerAgent, reqTool)
+			return done
+		},
+		ToolScopeMap: mcpScopeMap,
+	})
+	if !mcpPipeRes.Admitted {
+		writeError(w, fmt.Sprintf(`{"error":%q,"reason":%q}`, mcpPipeRes.BlockedBy, mcpPipeRes.BlockReason), http.StatusForbidden)
+		return
+	}
+	if mcpResolvedTool != "" {
+		prerequisite.RecordCompletedTool(r.Context(), mcpCallerAgent, mcpResolvedTool)
 	}
 
 	switch call.ToolName {
@@ -4289,8 +4342,12 @@ func handleSimulatedRequest(w http.ResponseWriter, r *http.Request) {
 	agentType := r.Header.Get("X-Cicada-Agent-Type")
 	provenance := r.Header.Get("X-Cicada-Content-Provenance")
 	clientToolID := r.Header.Get("X-Cicada-Tool-ID")
-	simTools, _ := agentcache.GetTools(r.Context(), agentID)
+	simTools, simToolsErr := agentcache.GetTools(r.Context(), agentID)
 	resolvedToolID, prereqMap, scopeMap := agentcache.ResolveToolForRequest(simTools, clientToolID, targetURL, r.Method)
+	if simToolsErr != nil && store.DB != nil && os.Getenv("CICADA_FAIL_CLOSED") != "false" {
+		prereqMap = map[string]string{"__manifest_unavailable__": "__lookup_failed__"}
+		resolvedToolID = ""
+	}
 
 	simPipeRes := pipeline.Evaluate(r.Context(), pipeline.Request{
 		AgentID:             agentID,
@@ -4455,7 +4512,7 @@ func handleSimulatedRequest(w http.ResponseWriter, r *http.Request) {
 		simActionClass = resolvedToolID
 		prerequisite.RecordCompletedTool(r.Context(), agentID, resolvedToolID)
 	}
-	if r.Method == http.MethodGet || taint.IsUntrustedProvenance(provenance) {
+	if (r.Method == http.MethodGet && taint.ShouldTaintOnRead(targetURL, provenance)) || taint.IsUntrustedProvenance(provenance) {
 		taint.MarkTainted(r.Context(), agentID, "sim_proxy:"+r.Method+":"+targetURL, "simulated external response ingestion")
 	}
 	if edgeLedger != nil {

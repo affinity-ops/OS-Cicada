@@ -658,3 +658,34 @@ func TestPipeline_AdaptiveAttacker_SingleShotUnboundedSQL_Escalated(t *testing.T
 		t.Errorf("expected EstimatedRecords=-1 (unbounded), got %d", result.BlastEstimate.EstimatedRecords)
 	}
 }
+
+func TestPipeline_ManifestPresent_UnresolvedTool_Blocked(t *testing.T) {
+	ctx := context.Background()
+	agentID := "manifest-enforced-agent"
+	taint.ClearTaint(ctx, agentID)
+
+	result := Evaluate(ctx, Request{
+		AgentID:          agentID,
+		TenantID:         "tenant-1",
+		AgentDescription: "Storage volume management agent",
+		AgentType:        "devops",
+		TargetURL:        "https://storage.internal/v1/unmapped_endpoint",
+		HTTPMethod:       "DELETE",
+		Body:             `{}`,
+		ToolID:           "", // Failed to resolve against manifest
+		PrerequisiteMap: map[string]string{
+			"storage:delete_volume": "storage:verify_backup",
+		},
+		ToolScopeMap: map[string]string{
+			"storage:delete_volume": "delete",
+		},
+	})
+
+	if result.Admitted {
+		t.Fatal("expected request to be denied when agent has a tool manifest and no tool resolves")
+	}
+	if result.BlockedBy != "tool_scope" {
+		t.Errorf("expected BlockedBy='tool_scope', got %q (%s)", result.BlockedBy, result.BlockReason)
+	}
+}
+

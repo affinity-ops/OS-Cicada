@@ -41,7 +41,8 @@ class CibaController extends Controller
             'tenant_id'       => 'required|string|max:255',
             'action_summary'  => 'required|string|max:1000',
             'target_url'      => 'nullable|string|max:2000',
-            'payload_preview' => 'nullable|string|max:2000',
+            'payload_preview' => 'nullable|string|max:65535',
+            'payload_hash'    => 'nullable|string|max:128',
             'risk_score'      => 'required|numeric|min:0|max:1',
             'risk_reason'     => 'nullable|string|max:1000',
             'timeout_seconds' => 'nullable|integer|min:10|max:300',
@@ -57,20 +58,21 @@ class CibaController extends Controller
             ->value('name') ?? 'Unknown Agent';
 
         DB::table('ciba_authorization_requests')->insert([
-            'id'              => $id,
-            'trace_id'        => $validated['trace_id'],
-            'agent_id'        => $validated['agent_id'],
-            'tenant_id'       => $validated['tenant_id'],
-            'agent_name'      => $agentName,
-            'action_summary'  => $validated['action_summary'],
-            'target_url'      => $validated['target_url'] ?? null,
-            'payload_preview' => $validated['payload_preview'] ?? null,
-            'risk_score'      => $validated['risk_score'],
-            'risk_reason'     => $validated['risk_reason'] ?? null,
-            'status'          => 'pending',
-            'expires_at'      => $now->copy()->addSeconds($timeoutSeconds),
-            'created_at'      => $now,
-            'updated_at'      => $now,
+            'id'                => $id,
+            'trace_id'          => $validated['trace_id'],
+            'agent_id'          => $validated['agent_id'],
+            'tenant_id'         => $validated['tenant_id'],
+            'agent_name'        => $agentName,
+            'action_summary'    => $validated['action_summary'],
+            'target_url'        => $validated['target_url'] ?? null,
+            'payload_preview'   => $validated['payload_preview'] ?? null,
+            'hold_payload_hash' => $validated['payload_hash'] ?? null,
+            'risk_score'        => $validated['risk_score'],
+            'risk_reason'       => $validated['risk_reason'] ?? null,
+            'status'            => 'pending',
+            'expires_at'        => $now->copy()->addSeconds($timeoutSeconds),
+            'created_at'        => $now,
+            'updated_at'        => $now,
         ]);
 
         Log::info('CIBA authorization request created', [
@@ -177,6 +179,7 @@ class CibaController extends Controller
             'approved'     => $record->status === 'approved',
             'responded_by' => $record->responded_by,
             'responded_at' => $record->responded_at,
+            'payload_hash' => $record->hold_payload_hash ?? null,
         ]);
     }
 
@@ -187,9 +190,16 @@ class CibaController extends Controller
             'device_signature' => 'required|string',
             'device_public_key' => 'required|string',
             'responded_at' => 'required|date',
+            'payload_hash' => 'nullable|string|max:128',
         ]);
 
         $cibaRequest = CibaAuthorizationRequest::findOrFail($traceId);
+
+        if (!empty($cibaRequest->hold_payload_hash) && !empty($validated['payload_hash'])) {
+            if (!hash_equals($cibaRequest->hold_payload_hash, $validated['payload_hash'])) {
+                return response()->json(['error' => 'Payload hash mismatch'], 403);
+            }
+        }
         
         // Find device by public key and owner
         $device = Device::where('public_key', $validated['device_public_key'])

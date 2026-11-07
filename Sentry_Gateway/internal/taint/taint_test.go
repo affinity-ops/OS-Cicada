@@ -60,3 +60,43 @@ func TestTaint_RetrievedProvenance_AutoTaintsAndEscalates(t *testing.T) {
 		t.Errorf("retrieved provenance on DELETE must auto-taint and ForceCIBA, got %+v", res)
 	}
 }
+
+func TestShouldTaintOnRead_TrustedVsUntrustedDomains(t *testing.T) {
+	t.Setenv("CICADA_TRUSTED_DOMAINS", "api.stripe.com,*.trusted.partner.io")
+
+	// 1. Trusted internal domains do NOT taint on GET
+	for _, u := range []string{
+		"https://db.internal/v1/users",
+		"https://billing.internal.company.com/v1/ledgers",
+		"https://orders.svc.cluster.local/api",
+		"https://crm.corp/contacts",
+		"https://api.stripe.com/v1/customers",
+		"https://sub.trusted.partner.io/v1/status",
+	} {
+		if ShouldTaintOnRead(u, "") {
+			t.Errorf("expected trusted domain %q NOT to taint on GET", u)
+		}
+	}
+
+	// 2. Untrusted external domains DO taint on GET
+	for _, u := range []string{
+		"https://news.ycombinator.com/item?id=1",
+		"https://pastebin.com/raw/abc123",
+		"https://untrusted-vendor.example.org/feed.json",
+	} {
+		if !ShouldTaintOnRead(u, "") {
+			t.Errorf("expected untrusted external domain %q to taint on GET", u)
+		}
+	}
+
+	// 3. Explicit untrusted provenance ("rag", "external") taints even on internal URL
+	if !ShouldTaintOnRead("https://db.internal/v1/docs", "rag") {
+		t.Error("expected explicit 'rag' provenance to taint even on internal URL")
+	}
+
+	// 4. Explicit trusted provenance ("internal", "system") does not taint
+	if ShouldTaintOnRead("https://api.partner.example.com/v1/health", "internal") {
+		t.Error("expected explicit 'internal' provenance not to taint on GET")
+	}
+}
+

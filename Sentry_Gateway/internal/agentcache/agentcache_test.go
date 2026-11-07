@@ -109,3 +109,72 @@ func TestCacheCounters(t *testing.T) {
 	queue.Client.Del(ctx, key, fgaKey)
 	t.Log("✅ All cache counter assertions passed.")
 }
+
+func TestResolveToolForRequest_Hardened(t *testing.T) {
+	ctx := context.Background()
+	agentID := "test-manifest-agent"
+	SetTools(agentID, []ToolManifestEntry{
+		{
+			ToolID:               "storage:read_volume",
+			ToolName:             "Read Storage Volume Metadata",
+			ToolScope:            "read",
+			RequiresPreviousTool: "",
+		},
+		{
+			ToolID:               "storage:verify_backup",
+			ToolName:             "Verify Volume Backup Snapshot",
+			ToolScope:            "read",
+			RequiresPreviousTool: "",
+		},
+		{
+			ToolID:               "storage:delete_volume",
+			ToolName:             "Delete Storage Volume",
+			ToolScope:            "delete",
+			RequiresPreviousTool: "storage:verify_backup",
+		},
+	})
+	defer ClearTools(agentID)
+
+	tools, err := GetTools(ctx, agentID)
+	if err != nil {
+		t.Fatalf("GetTools failed: %v", err)
+	}
+
+	// 1. Query-string keyword stuffing: attacker puts ?read_volume=1 on a DELETE /v1/volumes/vol-99 call.
+	// Must resolve to storage:delete_volume (NOT storage:read_volume), because query strings are stripped
+	// and read tools cannot match DELETE.
+	toolID, prereqs, scopes := ResolveToolForRequest(tools, "", "https://storage.internal/v1/volumes/vol-99?read_volume=1&verify_backup=true", "DELETE")
+	if toolID != "storage:delete_volume" {
+		t.Fatalf("expected storage:delete_volume on DELETE with query-string decoys, got %q", toolID)
+	}
+	if prereqs["storage:delete_volume"] != "storage:verify_backup" {
+		t.Fatalf("expected prerequisite storage:verify_backup, got %+v", prereqs)
+	}
+	if len(scopes) != 3 {
+		t.Fatalf("expected 3 tools in scope map, got %d", len(scopes))
+	}
+
+	// 2. Client header spoofing a harmless tool on a prerequisite-gated DELETE URL:
+	// server-side URL+method inference overrides the spoofed header.
+	spoofedID, _, _ := ResolveToolForRequest(tools, "storage:read_volume", "https://storage.internal/v1/volumes/vol-99", "DELETE")
+	if spoofedID != "storage:delete_volume" {
+		t.Fatalf("expected spoofed read_volume header on DELETE to resolve to storage:delete_volume, got %q", spoofedID)
+	}
+
+	// 3. Unknown URL that matches no tool in the manifest must return toolID == "" while preserving non-empty manifest maps
+	// so the pipeline fails closed.
+	unknownID, _, unknownScopes := ResolveToolForRequest(tools, "", "https://api.stripe.com/v1/charges", "POST")
+	if unknownID != "" {
+		t.Fatalf("expected empty toolID for unmapped URL when manifest exists, got %q", unknownID)
+	}
+	if len(unknownScopes) == 0 {
+		t.Fatal("expected non-empty scope map so pipeline knows agent has a manifest and fails closed")
+	}
+
+	// 4. Unknown client X-Cicada-Tool-ID not in manifest must return ""
+	bogusID, _, _ := ResolveToolForRequest(tools, "nonexistent:tool", "https://api.stripe.com/v1/charges", "GET")
+	if bogusID != "" {
+		t.Fatalf("expected empty toolID for unknown client header, got %q", bogusID)
+	}
+}
+

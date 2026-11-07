@@ -74,15 +74,14 @@ type Result struct {
 	Err         error
 }
 
-// ComputePayloadHash computes a deterministic SHA-256 commitment over the HTTP
-// method, target URL, and full request body bytes so CIBA human approvals are
-// cryptographically bound to the exact payload that will be executed.
+// ComputePayloadHash computes a deterministic SHA-256 commitment over the
+// length-prefixed HTTP method, target URL, and full request body bytes so CIBA
+// human approvals are cryptographically bound without delimiter ambiguity.
 func ComputePayloadHash(method, targetURL string, body []byte) string {
+	m := strings.ToUpper(strings.TrimSpace(method))
+	u := strings.TrimSpace(targetURL)
 	h := sha256.New()
-	h.Write([]byte(strings.ToUpper(strings.TrimSpace(method))))
-	h.Write([]byte("|"))
-	h.Write([]byte(strings.TrimSpace(targetURL)))
-	h.Write([]byte("|"))
+	fmt.Fprintf(h, "%d:%s\n%d:%s\n%d:", len(m), m, len(u), u, len(body))
 	h.Write(body)
 	return hex.EncodeToString(h.Sum(nil))
 }
@@ -168,14 +167,15 @@ func Authorize(ctx context.Context, req Request) Result {
 
 		switch pr.Status {
 		case "approved":
-			boundHash := req.PayloadHash
-			if pr.PayloadHash != "" && req.PayloadHash != "" && pr.PayloadHash != req.PayloadHash {
-				log.Printf("[CIBA] PAYLOAD HASH MISMATCH for agent=%s trace=%s (expected %s, got %s) — denying",
-					req.AgentID, req.TraceID, req.PayloadHash, pr.PayloadHash)
-				return Result{Approved: false, Status: "denied", Err: fmt.Errorf("CIBA payload hash mismatch")}
+			if req.PayloadHash != "" {
+				if pr.PayloadHash == "" || subtle.ConstantTimeCompare([]byte(pr.PayloadHash), []byte(req.PayloadHash)) != 1 {
+					log.Printf("[CIBA] PAYLOAD HASH MISSING OR MISMATCH for agent=%s trace=%s (expected %s, got %s) — denying",
+						req.AgentID, req.TraceID, req.PayloadHash, pr.PayloadHash)
+					return Result{Approved: false, Status: "denied", Err: fmt.Errorf("CIBA payload hash verification failed")}
+				}
 			}
-			log.Printf("[CIBA] APPROVED by %s for agent=%s trace=%s payload_hash=%s", pr.RespondedBy, req.AgentID, req.TraceID, boundHash)
-			return Result{Approved: true, Status: "approved", RespondedBy: pr.RespondedBy, PayloadHash: boundHash}
+			log.Printf("[CIBA] APPROVED by %s for agent=%s trace=%s payload_hash=%s", pr.RespondedBy, req.AgentID, req.TraceID, pr.PayloadHash)
+			return Result{Approved: true, Status: "approved", RespondedBy: pr.RespondedBy, PayloadHash: pr.PayloadHash}
 		case "denied":
 			log.Printf("[CIBA] DENIED by %s for agent=%s trace=%s", pr.RespondedBy, req.AgentID, req.TraceID)
 			return Result{Approved: false, Status: "denied", RespondedBy: pr.RespondedBy}

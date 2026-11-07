@@ -28,9 +28,11 @@ import (
 	"fmt"
 	"log"
 	"math/rand/v2"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -570,9 +572,28 @@ func populateSkillsCache(agentID string, skills map[string]SkillContract) {
 
 // ── Tools Manifest Cache (Server-Side Prerequisite & Atomic Scope Resolver) ──
 
-// GetTools retrieves the agent's active registered tools from Redis, falling
-// back to PostgreSQL (agent_tools table) via singleflight on cache miss.
+var memTools sync.Map // map[string][]ToolManifestEntry
+
+// SetTools seeds an in-memory tool manifest for an agent (used in standalone
+// mode and handler-level integration tests when Redis/PostgreSQL are absent).
+func SetTools(agentID string, tools []ToolManifestEntry) {
+	cp := make([]ToolManifestEntry, len(tools))
+	copy(cp, tools)
+	memTools.Store(agentID, cp)
+}
+
+// ClearTools removes an in-memory tool manifest entry for an agent.
+func ClearTools(agentID string) {
+	memTools.Delete(agentID)
+}
+
+// GetTools retrieves the agent's active registered tools from in-memory override
+// or Redis, falling back to PostgreSQL (agent_tools table) via singleflight on cache miss.
 func GetTools(ctx context.Context, agentID string) ([]ToolManifestEntry, error) {
+	if v, ok := memTools.Load(agentID); ok {
+		return v.([]ToolManifestEntry), nil
+	}
+
 	if queue.Client != nil {
 		key := cacheKeyTools(agentID)
 		data, err := queue.Client.Get(ctx, key).Result()
@@ -651,6 +672,15 @@ func populateToolsCache(agentID string, tools []ToolManifestEntry) {
 // ResolveToolForRequest derives the authoritative tool identity, prerequisite
 // map, and atomic tool scope map from the server-side tool manifest rather
 // than trusting client-controlled headers alone.
+//
+// Security properties:
+//  1. Query parameters (?foo=bar) and fragments (#baz) are stripped before URL
+//     matching so an agent cannot stuff a harmless tool keyword into a query string.
+//  2. Only canonical URL path segments are matched against tool IDs (never prose
+//     descriptions), and method-compatible tools with prerequisites take precedence.
+//  3. If the agent has a non-empty manifest and either claims an unknown tool ID
+//     or calls a URL that matches no declared tool, resolvedToolID is returned as ""
+//      alongside the non-empty maps so pipeline.Evaluate denies the request fail-closed.
 func ResolveToolForRequest(tools []ToolManifestEntry, clientToolID, targetURL, httpMethod string) (string, map[string]string, map[string]string) {
 	if len(tools) == 0 {
 		return strings.TrimSpace(clientToolID), nil, nil
@@ -663,44 +693,146 @@ func ResolveToolForRequest(tools []ToolManifestEntry, clientToolID, targetURL, h
 		scopeMap[t.ToolID] = t.ToolScope
 	}
 
-	trimmedClient := strings.TrimSpace(clientToolID)
-	if trimmedClient != "" {
-		if _, exists := prereqMap[trimmedClient]; exists {
-			return trimmedClient, prereqMap, scopeMap
-		}
-	}
+	pathSegs := extractCanonicalPathSegments(targetURL)
+	methodUpper := strings.ToUpper(strings.TrimSpace(httpMethod))
 
-	// Server-side inference: match URL path/host tokens against registered tools.
-	urlLower := strings.ToLower(targetURL)
-	bestToolID := ""
-	bestScore := 0
+	bestCompatibleID := ""
+	bestCompatibleScore := 0
+	bestCompatibleHasPrereq := false
+
+	bestAnyID := ""
+	bestAnyScore := 0
 
 	for _, t := range tools {
-		score := 0
-		idTokens := strings.FieldsFunc(strings.ToLower(t.ToolID+" "+t.ToolName), func(r rune) bool {
-			return r == ':' || r == '_' || r == '-' || r == '/' || r == ' '
-		})
-		for _, tok := range idTokens {
-			if len(tok) >= 3 && strings.Contains(urlLower, tok) {
-				score += 2
+		score := scoreToolAgainstPathSegments(t.ToolID, pathSegs)
+		if score <= 0 {
+			continue
+		}
+		if score > bestAnyScore {
+			bestAnyScore = score
+			bestAnyID = t.ToolID
+		}
+		if isScopeCompatibleWithMethod(t.ToolScope, methodUpper) {
+			hasPrereq := t.RequiresPreviousTool != ""
+			if score > bestCompatibleScore || (score == bestCompatibleScore && hasPrereq && !bestCompatibleHasPrereq) {
+				bestCompatibleScore = score
+				bestCompatibleID = t.ToolID
+				bestCompatibleHasPrereq = hasPrereq
 			}
 		}
-		if score > bestScore {
-			bestScore = score
-			bestToolID = t.ToolID
+	}
+
+	trimmedClient := strings.TrimSpace(clientToolID)
+	if trimmedClient != "" {
+		// Reject unknown client tool IDs immediately (fail-closed in pipeline).
+		if _, exists := prereqMap[trimmedClient]; !exists {
+			return "", prereqMap, scopeMap
 		}
+		// Prevent header spoofing: if the client header claims a tool whose scope is
+		// incompatible with the HTTP method, or if a method-compatible tool with a
+		// prerequisite matches the URL at least as well as the client header, enforce
+		// the server-inferred method-compatible tool.
+		if bestCompatibleID != "" && bestCompatibleID != trimmedClient {
+			clientCompatible := isScopeCompatibleWithMethod(scopeMap[trimmedClient], methodUpper)
+			clientScore := scoreToolAgainstPathSegments(trimmedClient, pathSegs)
+			if !clientCompatible || (bestCompatibleHasPrereq && clientScore <= bestCompatibleScore) {
+				return bestCompatibleID, prereqMap, scopeMap
+			}
+		}
+		return trimmedClient, prereqMap, scopeMap
 	}
 
-	if bestToolID != "" {
-		return bestToolID, prereqMap, scopeMap
+	if bestCompatibleID != "" {
+		return bestCompatibleID, prereqMap, scopeMap
+	}
+	if bestAnyID != "" {
+		return bestAnyID, prereqMap, scopeMap
 	}
 
-	// If the agent has only one registered tool, bind the request to it.
-	if len(tools) == 1 {
+	// Only bind automatically to a single tool when no URL is present (e.g. internal call).
+	if len(tools) == 1 && strings.TrimSpace(targetURL) == "" {
 		return tools[0].ToolID, prereqMap, scopeMap
 	}
 
-	return trimmedClient, prereqMap, scopeMap
+	// No tool resolved from manifest -> pipeline.Evaluate will deny fail-closed.
+	return "", prereqMap, scopeMap
+}
+
+func extractCanonicalPathSegments(rawURL string) map[string]bool {
+	segs := make(map[string]bool)
+	trimmed := strings.TrimSpace(rawURL)
+	if trimmed == "" {
+		return segs
+	}
+	parsed, err := url.Parse(trimmed)
+	pathPart := trimmed
+	if err == nil && parsed.Path != "" {
+		pathPart = parsed.Path
+	} else if idx := strings.IndexAny(pathPart, "?#"); idx >= 0 {
+		pathPart = pathPart[:idx]
+	}
+
+	tokens := strings.FieldsFunc(strings.ToLower(pathPart), func(r rune) bool {
+		return r == '/' || r == '_' || r == '-' || r == '.' || r == ':'
+	})
+	for _, tok := range tokens {
+		if len(tok) < 3 || tok == "api" || tok == "rest" {
+			continue
+		}
+		segs[tok] = true
+		if strings.HasSuffix(tok, "s") && len(tok) > 3 {
+			segs[strings.TrimSuffix(tok, "s")] = true
+		} else {
+			segs[tok+"s"] = true
+		}
+	}
+	return segs
+}
+
+func scoreToolAgainstPathSegments(toolID string, pathSegs map[string]bool) int {
+	if len(pathSegs) == 0 {
+		return 0
+	}
+	// If toolID has a namespace prefix (e.g. "storage:delete_volume"), focus on
+	// the action/resource tokens so generic namespace prefixes cannot be abused.
+	targetPart := strings.ToLower(toolID)
+	if idx := strings.IndexByte(targetPart, ':'); idx >= 0 && idx+1 < len(targetPart) {
+		targetPart = targetPart[idx+1:]
+	}
+	tokens := strings.FieldsFunc(targetPart, func(r rune) bool {
+		return r == '_' || r == '-' || r == '/' || r == ':'
+	})
+	score := 0
+	for _, tok := range tokens {
+		if len(tok) < 3 {
+			continue
+		}
+		// Skip generic verb prefixes so matching anchors on resource nouns or specific actions
+		if tok == "get" || tok == "create" || tok == "update" || tok == "delete" || tok == "read" || tok == "write" || tok == "list" {
+			continue
+		}
+		if pathSegs[tok] {
+			score += 2
+		}
+	}
+	return score
+}
+
+func isScopeCompatibleWithMethod(scope, methodUpper string) bool {
+	switch strings.ToLower(strings.TrimSpace(scope)) {
+	case "", "unrestricted":
+		return true
+	case "read":
+		return methodUpper == "GET" || methodUpper == "HEAD" || methodUpper == "OPTIONS"
+	case "write":
+		return methodUpper == "POST" || methodUpper == "PUT" || methodUpper == "PATCH"
+	case "delete":
+		return methodUpper == "DELETE"
+	case "transact":
+		return methodUpper == "POST"
+	default:
+		return true
+	}
 }
 
 // parseJSONStringArray lightly parses a JSON string array without importing
