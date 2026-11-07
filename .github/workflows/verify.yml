@@ -1,0 +1,129 @@
+name: Verify & E2E CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  gateway-verify:
+    name: Gateway Build, Tests, Vuln Scan & Quickstart
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: Sentry_Gateway/go.mod
+          cache-dependency-path: Sentry_Gateway/go.sum
+
+      - name: Install govulncheck
+        run: go install golang.org/x/vuln/cmd/govulncheck@latest
+
+      - name: Run release verification suite (scripts/verify_release.sh)
+        run: ./scripts/verify_release.sh
+
+  production-e2e:
+    name: Production Path E2E (Postgres + Redis + Core API + Gateway)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: cicada_db
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: Sentry_Gateway/go.mod
+          cache-dependency-path: Sentry_Gateway/go.sum
+
+      - name: Set up PHP 8.3
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: mbstring, xml, ctype, json, pdo, pdo_pgsql, pgsql, redis
+          coverage: none
+
+      - name: Install postgresql-client
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+
+      - name: Migrate & seed Core API (PostgreSQL)
+        working-directory: Core_API
+        run: |
+          composer install --no-interaction --prefer-dist --no-progress
+          cp .env.example .env
+          sed -i 's/^DB_CONNECTION=.*/DB_CONNECTION=pgsql/' .env
+          sed -i 's/^# *DB_HOST=.*/DB_HOST=127.0.0.1/' .env
+          sed -i 's/^DB_HOST=.*/DB_HOST=127.0.0.1/' .env
+          sed -i 's/^# *DB_PORT=.*/DB_PORT=5432/' .env
+          sed -i 's/^DB_PORT=.*/DB_PORT=5432/' .env
+          sed -i 's/^# *DB_DATABASE=.*/DB_DATABASE=cicada_db/' .env
+          sed -i 's/^DB_DATABASE=.*/DB_DATABASE=cicada_db/' .env
+          sed -i 's/^# *DB_USERNAME=.*/DB_USERNAME=postgres/' .env
+          sed -i 's/^DB_USERNAME=.*/DB_USERNAME=postgres/' .env
+          sed -i 's/^# *DB_PASSWORD=.*/DB_PASSWORD=postgres/' .env
+          sed -i 's/^DB_PASSWORD=.*/DB_PASSWORD=postgres/' .env
+          echo "GATEWAY_INTERNAL_KEY=ci-gateway-secret" >> .env
+          echo "OPERATOR_API_KEY=ci-operator-secret" >> .env
+          php artisan key:generate
+          php artisan migrate --force
+          php artisan db:seed --class=GoldStandardAgentSeeder --force
+
+      - name: Run Production Path E2E Suite (scripts/e2e_production.sh)
+        run: |
+          (cd Core_API && php artisan serve --port=8000 >/tmp/core_api.log 2>&1) &
+          API_PID=$!
+          for _ in $(seq 1 30); do curl -sf -m 1 http://localhost:8000/up >/dev/null 2>&1 && break; sleep 1; done
+
+          (cd Sentry_Gateway && go build -o /tmp/sentry ./cmd/sentry)
+          (
+            cd Sentry_Gateway
+            PORT=8080 \
+            CICADA_DEV_MODE=true \
+            CICADA_POSTGRES_URL="postgres://postgres:postgres@127.0.0.1:5432/cicada_db?sslmode=disable" \
+            CICADA_REDIS_URL="redis://127.0.0.1:6379" \
+            CICADA_CORE_API_URL="http://localhost:8000" \
+            CICADA_INTERNAL_KEY="ci-gateway-secret" \
+            /tmp/sentry >/tmp/sentry.log 2>&1
+          ) &
+          GW_PID=$!
+          for _ in $(seq 1 30); do curl -sf -m 1 http://localhost:8080/health >/dev/null 2>&1 && break; sleep 1; done
+
+          IDS=$(PGPASSWORD=postgres psql -h 127.0.0.1 -U postgres -d cicada_db -tAc "select id||' '||tenant_id from agents limit 1")
+          export AGENT_ID="${IDS% *}"
+          export TENANT_ID="${IDS#* }"
+          export GATEWAY="http://localhost:8080"
+          export GATEWAY_SECRET="ci-gateway-secret"
+          ./scripts/e2e_production.sh
+
+          kill "$GW_PID" "$API_PID" 2>/dev/null || true

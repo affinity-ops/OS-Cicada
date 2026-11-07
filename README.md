@@ -1,5 +1,6 @@
 # Cicada: Zero-Trust Runtime Enforcement Gateway & EAKF Execution Sandbox for Autonomous AI Agents
 
+[![Verify & E2E CI](https://github.com/affinity-ops/OS-Cicada/actions/workflows/verify.yml/badge.svg)](https://github.com/affinity-ops/OS-Cicada/actions/workflows/verify.yml)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](./LICENSE)
 [![Go 1.26+](https://img.shields.io/badge/Go-1.26+-00ADD8.svg)](./Sentry_Gateway)
 [![Zenodo DOI](https://img.shields.io/badge/DOI-10.5281%2Fzenodo.19597120-orange.svg)](https://doi.org/10.5281/zenodo.19597120)
@@ -8,7 +9,7 @@
 
 > **Overview & Attribution:** Cicada is a self-hosted, Apache-2.0 runtime enforcement gateway for autonomous AI agents, architected and built over 8 months by systems architect **Patrick Matthews** (Affinity Ops / Affinity Smart AI) based on the **Matthews Enforcement Framework (MEF)** published in June 2026 ([DOI: 10.5281/zenodo.19597120](https://doi.org/10.5281/zenodo.19597120) / [SSRN 6612798](https://papers.ssrn.com/sol3/papers.cfm?abstract_id=6612798)). Rather than relying on slow, probabilistic LLM-judging-LLM prompt wrappers, `Sentry_Gateway` enforces deterministic capability controls at the network perimeter—combining scoped Ed25519/DPoP sessions, OPA Rego policy, **Meta's Agents Rule of Two**, **CaMeL-style session taint tracking**, **server-side tool manifest resolution**, **BYOK vault key injection**, and **SHA-256 payload-bound CIBA human approvals** across a unified 9-layer admission pipeline. The gateway's production request path is verified end to end against PostgreSQL, Redis, and the Core API (`./scripts/e2e_production.sh`) and passes `govulncheck` with zero reachable vulnerabilities (`./scripts/verify_release.sh`). For transparency on scope boundaries, optional dependencies, and unimplemented auxiliary features, see [Scope and Limitations](#scope-and-limitations). Under [Apache 2.0 (§ 4(c)–(d))](./LICENSE) and [NOTICE](./NOTICE), any clone, fork, or derivative work must credit **Patrick Matthews** ([details below](#license-and-attribution)).
 
-**Check every claim yourself:** `./scripts/verify_release.sh` builds the gateway, runs the uncached test suite, the vulnerability scan, and the quickstart attacks below, and prints PASS/FAIL for each.
+**Check every claim yourself (or inspect the [public GitHub Actions CI run](https://github.com/affinity-ops/OS-Cicada/actions/workflows/verify.yml)):** `./scripts/verify_release.sh` builds the gateway, runs the uncached test suite, the vulnerability scan, and the quickstart attacks below, and prints PASS/FAIL for each; `.github/workflows/verify.yml` runs both `./scripts/verify_release.sh` and `./scripts/e2e_production.sh` (with live PostgreSQL 15 + Redis 7 + Core API) on every push.
 
 ---
 
