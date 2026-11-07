@@ -689,3 +689,86 @@ func TestPipeline_ManifestPresent_UnresolvedTool_Blocked(t *testing.T) {
 	}
 }
 
+func TestPipeline_Layer7_DestructiveActionClassifier_ForcesCIBA(t *testing.T) {
+	ctx := context.Background()
+	cases := []struct {
+		name           string
+		method         string
+		targetURL      string
+		body           string
+		wantActionType string
+		wantSeverity   string
+	}{
+		{
+			name:           "PATCH lifecycle_policy (non-DELETE volume expiry)",
+			method:         "PATCH",
+			targetURL:      "https://database.internal.com/v1/volumes/vol-prod/lifecycle_policy",
+			body:           `{"expire_days": 1}`,
+			wantActionType: "configuration_reset",
+			wantSeverity:   "high",
+		},
+		{
+			name:           "POST suspend_backup (non-DELETE backup disablement)",
+			method:         "POST",
+			targetURL:      "https://database.internal.com/v1/backups/schedule",
+			body:           `{"operation": "suspend_backup", "volume": "vol-prod"}`,
+			wantActionType: "configuration_reset",
+			wantSeverity:   "high",
+		},
+		{
+			name:           "POST delete_snapshot (non-DELETE recovery removal)",
+			method:         "POST",
+			targetURL:      "https://database.internal.com/v1/snapshots/action",
+			body:           `{"cmd": "delete_snapshot", "snapshot_id": "snap-01"}`,
+			wantActionType: "data_deletion",
+			wantSeverity:   "high",
+		},
+		{
+			name:           "POST DROP TABLE (schema destruction via SQL RPC)",
+			method:         "POST",
+			targetURL:      "https://database.internal.com/v1/query",
+			body:           `{"query": "DROP TABLE customers"}`,
+			wantActionType: "schema_modification",
+			wantSeverity:   "critical",
+		},
+		{
+			name:           "HTTP DELETE generic resource",
+			method:         "DELETE",
+			targetURL:      "https://database.internal.com/v1/records/vol-prod",
+			body:           `{}`,
+			wantActionType: "data_deletion",
+			wantSeverity:   "high",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			agentID := "destructive-regression-agent-" + tc.name
+			taint.ClearTaint(ctx, agentID)
+			res := Evaluate(ctx, Request{
+				AgentID:          agentID,
+				TenantID:         "tenant-1",
+				AgentDescription: "Internal database records cleanup and maintenance agent",
+				AgentType:        "database",
+				TargetURL:        tc.targetURL,
+				HTTPMethod:       tc.method,
+				Body:             tc.body,
+				Scopes:           []string{"proxy:write"},
+			})
+			if !res.ForceCIBA || !res.BlastEstimate.ForceCIBA {
+				t.Fatalf("%s: expected Layer 7 (BlastEstimate.ForceCIBA) to set ForceCIBA=true, got ForceCIBA=%v BlastEstimate.ForceCIBA=%v (DestructiveAction=%+v)", tc.name, res.ForceCIBA, res.BlastEstimate.ForceCIBA, res.DestructiveAction)
+			}
+			if !res.DestructiveAction.IsDestructive {
+				t.Fatalf("%s: expected DestructiveAction.IsDestructive=true", tc.name)
+			}
+			if res.DestructiveAction.ActionType != tc.wantActionType {
+				t.Errorf("%s: ActionType=%q, want %q", tc.name, res.DestructiveAction.ActionType, tc.wantActionType)
+			}
+			if res.DestructiveAction.Severity != tc.wantSeverity {
+				t.Errorf("%s: Severity=%q, want %q", tc.name, res.DestructiveAction.Severity, tc.wantSeverity)
+			}
+		})
+	}
+}
+
+

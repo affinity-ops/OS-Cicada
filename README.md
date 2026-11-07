@@ -136,7 +136,7 @@ Documented clearly so operators and evaluators know exact boundaries before depl
 
 | Area | Status |
 | :--- | :--- |
-| **Prompt-injection detection** | Pattern-based (deobfuscation + regex + DOM scan). Catches known phrasings and encodings; a reworded attack can get through. No deterministic filter fully solves this—which is why capability scopes, SSRF guards, DLP, and taint rules enforce the hard boundary. |
+| **Pattern-based detection (prompt injection & destructive-action keywords)** | Heuristic layers (deobfuscation + regex + DOM scan + `hitl.ClassifyDestructiveAction`). They catch known phrasings, encodings, and destructive patterns (`DROP TABLE`, `lifecycle_policy`, `suspend_backup`), but a reworded payload or custom API verb can bypass pattern matching—which is why capability scopes, RBAC, tool manifests, SSRF guards, DLP, and taint rules enforce the hard boundary. |
 | **Bypass protection** | The gateway only protects traffic routed through it. Use `deploy/k8s/eakfd-networkpolicy.yaml` or equivalent egress rules so agents cannot call APIs directly. |
 | **EAKF (`eakfd`) kernel isolation** | `eakfd` runs code in an isolated UNIX-socket subprocess with stripped env, ephemeral temp dir, and `.tfstate`/IP output scrubbing (`cmd/eakfd/main.go`). Kernel syscall interception (`gVisor`/`Kata`) and zero-egress lockdown come from running `eakfd` under a Kubernetes `RuntimeClass` + `deploy/k8s/eakfd-networkpolicy.yaml`. Bare-metal Firecracker microVMs (`docs/EPHEMERAL_AGENT_KERNEL_FIREWALL.md` §7.3) are design-only. |
 | **Post-quantum gossip signatures** | Implemented but opt-in: active only with `CICADA_GOSSIP_PEERS_CONFIG` and an ML-DSA-65 key. Otherwise gossip uses a shared HMAC secret. |
