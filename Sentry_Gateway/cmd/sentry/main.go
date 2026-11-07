@@ -644,6 +644,8 @@ func main() {
 	r.Post("/v1/llm/proxy", handleLLMProxy)          // LLM API proxy: memory isolation + reasoning audit
 	r.Post("/v1/gossip/receive", handleGossipReceive)   // inter-node gossip transport
 	r.With(requireService).Post("/v1/sandbox/report", handleSandboxReport)   // anomaly reports from shadow sandbox
+	r.With(requireServiceOrPortal).Post("/v1/admin/canary/issue", handleCanaryIssue)   // issue agent/tenant-scoped honeytoken
+	r.With(requireServiceOrPortal).Post("/v1/admin/canary/revoke", handleCanaryRevoke) // revoke active honeytoken
 	r.Get("/v1/verify/agent/{evar}", handlePublicTrustIntrospection)
 	r.Post("/v1/vault/keys/bind", handleKeyBinding)
 	r.Post("/v1/aegis/directives", handleAegisDirectives)
@@ -2349,7 +2351,10 @@ func handleAgentRequest(w http.ResponseWriter, r *http.Request) {
 	//   Layer 7: blast_radius     (unbounded SQL/shell/batch impact estimator)
 	//   Layer 8: tx_profile       (Deontic Never-Rules + z-score/new-recipient)
 	//   Layer 9: camel_taint      (CaMeL session taint capability restriction)
+	sessionIDHdr := r.Header.Get("X-Cicada-Session-ID")
+	taintScopeKey := taint.ScopeKey(agentID, sessionIDHdr)
 	if r.Header.Get("X-Cicada-Memory-Action") == "flush" {
+		taint.ClearTaint(r.Context(), taintScopeKey)
 		taint.ClearTaint(r.Context(), agentID)
 	}
 
@@ -2419,6 +2424,7 @@ func handleAgentRequest(w http.ResponseWriter, r *http.Request) {
 		ToolScopeMap:        scopeMap,
 		EndpointCriticality: endpointCrit,
 		TxProfile:           agentTxProfile,
+		SessionID:           sessionIDHdr,
 	})
 
 	if !pipeRes.Admitted {
@@ -2690,6 +2696,7 @@ func handleAgentRequest(w http.ResponseWriter, r *http.Request) {
 				log.Printf("[CIBA] APPROVED by %s: agent=%s trace=%s payload_hash=%s",
 					cibaResult.RespondedBy, agentID, traceID, cibaResult.PayloadHash)
 				// Operator explicitly approved this action — clear session taint.
+				taint.ClearTaint(r.Context(), taintScopeKey)
 				taint.ClearTaint(r.Context(), agentID)
 				edgeLedger.AppendRecord(ledger.EventRecord{
 					HumanContext: humanContextJSON,
@@ -3107,7 +3114,7 @@ func handleAgentRequest(w http.ResponseWriter, r *http.Request) {
 	// or carrying untrusted provenance marks the agent session tainted so
 	// subsequent state mutations require CIBA. Trusted internal domains do not taint.
 	if (r.Method == http.MethodGet && taint.ShouldTaintOnRead(targetURL, provenanceHdr)) || taint.IsUntrustedProvenance(provenanceHdr) {
-		taint.MarkTainted(r.Context(), agentID, "proxy:"+r.Method+":"+targetURL, "ingested untrusted external API response")
+		taint.MarkTainted(r.Context(), taintScopeKey, "proxy:"+r.Method+":"+targetURL, "ingested untrusted external API response")
 	}
 
 	edgeLedger.AppendRecord(ledger.EventRecord{
@@ -3247,6 +3254,12 @@ func ghostFallback(w http.ResponseWriter, method, agentID string) {
 // ────────────────────────────────────────────────────────────────────────────
 
 func handleGossipReceive(w http.ResponseWriter, r *http.Request) {
+	// ── Layer 0: License Mesh Entitlement Gate ────────────────────────────
+	if license.ActiveLicense != nil && !license.MeshAllowed() {
+		writeError(w, `{"error":"gossip receive: license tier does not include mesh access"}`, http.StatusForbidden)
+		return
+	}
+
 	// ── Layer 1: IP allowlist (existing) ──────────────────────────────────
 	// Restrict to loopback and configured internal IPs.
 	remoteIP, _, _ := net.SplitHostPort(r.RemoteAddr)
@@ -3977,7 +3990,10 @@ func handleLLMProxy(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	sessionIDHdr := r.Header.Get("X-Cicada-Session-ID")
+	taintScopeKey := taint.ScopeKey(agentID, sessionIDHdr)
 	if r.Header.Get("X-Cicada-Memory-Action") == "flush" {
+		taint.ClearTaint(r.Context(), taintScopeKey)
 		taint.ClearTaint(r.Context(), agentID)
 	}
 	llmProv := r.Header.Get("X-Cicada-Content-Provenance")
@@ -4499,7 +4515,10 @@ func handleSimulatedRequest(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// ── Gate 4 & 5: Unified 9-Layer Admission Pipeline ────────────────────────
+	sessionIDHdr := r.Header.Get("X-Cicada-Session-ID")
+	taintScopeKey := taint.ScopeKey(agentID, sessionIDHdr)
 	if r.Header.Get("X-Cicada-Memory-Action") == "flush" {
+		taint.ClearTaint(r.Context(), taintScopeKey)
 		taint.ClearTaint(r.Context(), agentID)
 	}
 	agentDesc := r.Header.Get("X-Cicada-Agent-Description")
@@ -4533,6 +4552,7 @@ func handleSimulatedRequest(w http.ResponseWriter, r *http.Request) {
 		ToolScopeMap:        scopeMap,
 		EndpointCriticality: r.Header.Get("X-Cicada-Skill-Criticality"),
 		TxProfile:           loadAgentTxProfile(r.Context(), agentID),
+		SessionID:           sessionIDHdr,
 	})
 
 	if !simPipeRes.Admitted {
@@ -4677,7 +4697,7 @@ func handleSimulatedRequest(w http.ResponseWriter, r *http.Request) {
 		prerequisite.RecordCompletedTool(r.Context(), agentID, resolvedToolID)
 	}
 	if (r.Method == http.MethodGet && taint.ShouldTaintOnRead(targetURL, provenance)) || taint.IsUntrustedProvenance(provenance) {
-		taint.MarkTainted(r.Context(), agentID, "sim_proxy:"+r.Method+":"+targetURL, "simulated external response ingestion")
+		taint.MarkTainted(r.Context(), taintScopeKey, "sim_proxy:"+r.Method+":"+targetURL, "simulated external response ingestion")
 	}
 	if edgeLedger != nil {
 		edgeLedger.AppendRecord(ledger.EventRecord{
@@ -4791,4 +4811,49 @@ func recordAgentTxSuccess(ctx context.Context, agentID string, feat txprofile.Tr
 	if profBytes, err := txprofile.MarshalProfile(prof); err == nil {
 		queue.Client.Set(ctx, "cicada:txprofile:"+agentID, string(profBytes), 24*time.Hour)
 	}
+}
+
+func handleCanaryIssue(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		AgentID   string           `json:"agent_id"`
+		TenantID  string           `json:"tenant_id"`
+		TokenType canary.TokenType `json:"token_type"`
+	}
+	if err := json.NewDecoder(io.LimitReader(r.Body, 64*1024)).Decode(&req); err != nil {
+		writeError(w, `{"error":"invalid JSON payload"}`, http.StatusBadRequest)
+		return
+	}
+	tok, err := canary.Issue(r.Context(), req.AgentID, req.TenantID, req.TokenType)
+	if err != nil {
+		writeError(w, fmt.Sprintf(`{"error":%q}`, err.Error()), http.StatusBadRequest)
+		return
+	}
+	writeJSON(w, http.StatusCreated, map[string]any{
+		"status":     "issued",
+		"token":      tok.Value,
+		"token_type": tok.Type,
+		"agent_id":   tok.AgentID,
+		"tenant_id":  tok.TenantID,
+		"created_at": tok.CreatedAt.Format(time.RFC3339),
+	})
+}
+
+func handleCanaryRevoke(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		TenantID string `json:"tenant_id"`
+		Token    string `json:"token"`
+	}
+	if err := json.NewDecoder(io.LimitReader(r.Body, 64*1024)).Decode(&req); err != nil {
+		writeError(w, `{"error":"invalid JSON payload"}`, http.StatusBadRequest)
+		return
+	}
+	if err := canary.Revoke(r.Context(), req.TenantID, req.Token); err != nil {
+		writeError(w, fmt.Sprintf(`{"error":%q}`, err.Error()), http.StatusBadRequest)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"status":    "revoked",
+		"tenant_id": req.TenantID,
+		"token":     req.Token,
+	})
 }

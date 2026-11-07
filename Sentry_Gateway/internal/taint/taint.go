@@ -37,8 +37,22 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
-// DefaultTTL is how long a session remains tainted without a context flush.
-const DefaultTTL = 30 * time.Minute
+// DefaultTTL is how long a session remains tainted without a context flush
+// (15 minutes, matching the 15-minute JIT session token lifetime).
+const DefaultTTL = 15 * time.Minute
+
+// ScopeKey returns the taint storage key for an agent and optional sub-session/thread ID.
+// When sessionID is non-empty (e.g. from X-Cicada-Session-ID), taint is isolated to
+// agentID:sessionID so concurrent user conversations sharing one agent_id do not
+// cross-taint each other. When sessionID is empty, taint is keyed at agentID.
+func ScopeKey(agentID, sessionID string) string {
+	agentID = strings.TrimSpace(agentID)
+	sessionID = strings.TrimSpace(sessionID)
+	if agentID == "" || sessionID == "" {
+		return agentID
+	}
+	return agentID + ":" + sessionID
+}
 
 // TaintRecord describes when and why an agent session became tainted.
 type TaintRecord struct {

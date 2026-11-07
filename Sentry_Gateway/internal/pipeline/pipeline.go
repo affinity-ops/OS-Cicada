@@ -29,6 +29,7 @@ package pipeline
 import (
 	"context"
 	"fmt"
+	"os"
 
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
@@ -89,6 +90,16 @@ type Request struct {
 	// mandates Ephemeral Agent Kernel Firewall (eakfd) sandboxing.
 	// Never populated from the untrusted client request body.
 	EAKFEnabled bool
+
+	// SessionID is an optional sub-session or conversation identifier
+	// (X-Cicada-Session-ID). When present, Layer 9 CaMeL taint is scoped to
+	// AgentID:SessionID so concurrent user sessions do not cross-taint each other.
+	SessionID string
+
+	// RequireToolManifest enforces fail-closed Layer 6 denial even when the
+	// agent has zero rows in agent_tools (also enabled globally via
+	// CICADA_REQUIRE_TOOL_MANIFEST=true).
+	RequireToolManifest bool
 }
 
 // LayerResult captures one layer's decision and reason.
@@ -352,6 +363,25 @@ func Evaluate(ctx context.Context, req Request) PipelineResult {
 			pipelineSpan.SetStatus(codes.Error, "blocked: "+scopeResult.Reason)
 			return result
 		}
+	} else if len(req.PrerequisiteMap) == 0 && (req.RequireToolManifest || os.Getenv("CICADA_REQUIRE_TOOL_MANIFEST") == "true") {
+		ctx6, span6 := tracer.Start(ctx, "pipeline.layer.tool_scope")
+		reason := fmt.Sprintf("MISSING TOOL MANIFEST: strict tool manifest enforcement is enabled (CICADA_REQUIRE_TOOL_MANIFEST), and agent %q has no registered tools for (%s %s)", req.AgentID, req.HTTPMethod, req.TargetURL)
+		scopeLayer := LayerResult{
+			Layer:   "tool_scope",
+			Blocked: true,
+			Reason:  reason,
+		}
+		setLayerSpanAttributes(span6, scopeLayer, req.AgentID)
+		span6.End()
+		_ = ctx6
+
+		result.LayerResults = append(result.LayerResults, scopeLayer)
+		result.Admitted = false
+		result.BlockedBy = "tool_scope"
+		result.BlockReason = reason
+		pipelineSpan.SetAttributes(attribute.String("pipeline.blocked_by", "tool_scope"))
+		pipelineSpan.SetStatus(codes.Error, "blocked: "+reason)
+		return result
 	}
 
 	// ── Layer 7: Blast-Radius Estimation (Pre-Execution Impact Analysis) ─
@@ -434,7 +464,14 @@ func Evaluate(ctx context.Context, req Request) PipelineResult {
 	// retrieved RAG context, or external GET), any state-mutating request
 	// (POST/PUT/PATCH/DELETE) is escalated to CIBA regardless of semantic score.
 	ctx9, span9 := tracer.Start(ctx, "pipeline.layer.camel_taint")
-	taintRes := taint.CheckCapability(ctx9, req.AgentID, req.HTTPMethod, req.TargetURL, req.Provenance)
+	taintKey := taint.ScopeKey(req.AgentID, req.SessionID)
+	taintRes := taint.CheckCapability(ctx9, taintKey, req.HTTPMethod, req.TargetURL, req.Provenance)
+	if !taintRes.Tainted && req.SessionID != "" {
+		// Also check agent-wide taint (e.g. Aegis-0 quarantine or Ghost Sandbox diversion)
+		if agentWideRes := taint.CheckCapability(ctx9, req.AgentID, req.HTTPMethod, req.TargetURL, ""); agentWideRes.Tainted {
+			taintRes = agentWideRes
+		}
+	}
 	var taintScore float64
 	if taintRes.ForceCIBA {
 		taintScore = 1.0

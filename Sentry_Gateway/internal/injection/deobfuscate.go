@@ -6,6 +6,7 @@ package injection
 import (
 	"encoding/base64"
 	"encoding/hex"
+	"html"
 	"net/url"
 	"regexp"
 	"strings"
@@ -220,6 +221,13 @@ func extractDecodedPayloads(body string) []struct {
 	if strings.Count(body, "%") >= 4 {
 		if unescaped, err := url.QueryUnescape(body); err == nil && unescaped != body {
 			out = append(out, struct{ encoding, decoded string }{"url_encoding", unescaped})
+		}
+	}
+
+	// 1b. HTML decimal/hex/named entity sequences (&#73; / &#x49; / &amp;)
+	if strings.Contains(body, "&#") || strings.Count(body, "&") >= 2 {
+		if unescaped := html.UnescapeString(body); unescaped != body {
+			out = append(out, struct{ encoding, decoded string }{"html_entity", unescaped})
 		}
 	}
 

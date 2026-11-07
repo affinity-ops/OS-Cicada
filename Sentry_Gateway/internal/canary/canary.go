@@ -43,10 +43,19 @@ import (
 	"log"
 	"net/url"
 	"regexp"
+	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/asai/cicada/sentry/internal/queue"
+)
+
+// localTokens provides an in-memory fallback store (tokenValue -> Token) when
+// Redis is unavailable (standalone mode, unit tests, or degraded infrastructure).
+var (
+	localTokensMu sync.RWMutex
+	localTokens   = make(map[string]Token)
 )
 
 var (
@@ -137,16 +146,20 @@ func tenantSetKey(tenantID string) string {
 	return fmt.Sprintf("cicada:canary:tenant:%s", tenantID)
 }
 
-// Issue generates a new canary token and registers it in Redis.
+// Issue generates a new canary token and registers it in Redis (with an
+// in-memory fallback when Redis is unavailable, such as standalone mode).
 // The token is scoped to a specific agent and tenant so that when it triggers,
 // we know precisely which agent exfiltrated it.
 //
 // TTL of 72 hours: long enough to be used in multiple agent sessions (agents
-// can cache context), short enough to prevent the Redis key store from growing
+// can cache context), short enough to prevent the key store from growing
 // unbounded if tokens are never triggered.
 func Issue(ctx context.Context, agentID, tenantID string, tokenType TokenType) (Token, error) {
-	if queue.Client == nil {
-		return Token{}, fmt.Errorf("Redis not available — cannot issue canary token")
+	if agentID == "" || tenantID == "" {
+		return Token{}, fmt.Errorf("agentID and tenantID are required to issue canary token")
+	}
+	if tokenType == "" {
+		tokenType = TokenTypeAPIKey
 	}
 
 	// Generate 16 bytes of cryptographic randomness for the token suffix.
@@ -158,9 +171,17 @@ func Issue(ctx context.Context, agentID, tenantID string, tokenType TokenType) (
 
 	// Build a token that looks realistic to an LLM (provider:format:random)
 	// but is unmistakably a canary in our detection scan.
-	tenantPrefix := tenantID
+	tenantPrefix := strings.Map(func(r rune) rune {
+		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') {
+			return r
+		}
+		return -1
+	}, tenantID)
 	if len(tenantPrefix) > 6 {
-		tenantPrefix = tenantPrefix[:6] // first 6 chars of tenant UUID
+		tenantPrefix = tenantPrefix[:6] // first 6 alphanumeric chars of tenant ID
+	}
+	if tenantPrefix == "" {
+		tenantPrefix = "tenant"
 	}
 	tokenValue := fmt.Sprintf("CICADA_CANARY_%s_%s_%s",
 		string(tokenType), tenantPrefix, hex.EncodeToString(rawBytes))
@@ -170,22 +191,28 @@ func Issue(ctx context.Context, agentID, tenantID string, tokenType TokenType) (
 		Type:      tokenType,
 		AgentID:   agentID,
 		TenantID:  tenantID,
-		CreatedAt: time.Now(),
+		CreatedAt: time.Now().UTC(),
 	}
 
-	// Store in Redis: key=token value, value=metadata JSON, TTL=72h
-	pipe := queue.Client.Pipeline()
-	pipe.HSet(ctx, redisKey(tokenValue),
-		"agent_id", agentID,
-		"tenant_id", tenantID,
-		"token_type", string(tokenType),
-		"created_at", token.CreatedAt.Unix(),
-	)
-	pipe.Expire(ctx, redisKey(tokenValue), 72*time.Hour)
-	pipe.SAdd(ctx, tenantSetKey(tenantID), tokenValue)
-	pipe.Expire(ctx, tenantSetKey(tenantID), 72*time.Hour)
-	if _, err := pipe.Exec(ctx); err != nil {
-		return Token{}, fmt.Errorf("store canary in Redis: %w", err)
+	localTokensMu.Lock()
+	localTokens[tokenValue] = token
+	localTokensMu.Unlock()
+
+	if queue.Client != nil {
+		// Store in Redis: key=token value, value=metadata hash, TTL=72h
+		pipe := queue.Client.Pipeline()
+		pipe.HSet(ctx, redisKey(tokenValue),
+			"agent_id", agentID,
+			"tenant_id", tenantID,
+			"token_type", string(tokenType),
+			"created_at", strconv.FormatInt(token.CreatedAt.Unix(), 10),
+		)
+		pipe.Expire(ctx, redisKey(tokenValue), 72*time.Hour)
+		pipe.SAdd(ctx, tenantSetKey(tenantID), tokenValue)
+		pipe.Expire(ctx, tenantSetKey(tenantID), 72*time.Hour)
+		if _, err := pipe.Exec(ctx); err != nil {
+			return Token{}, fmt.Errorf("store canary in Redis: %w", err)
+		}
 	}
 
 	log.Printf("[CANARY] Issued token type=%s agent=%s tenant=%s", tokenType, agentID, tenantID)
@@ -202,63 +229,79 @@ func Issue(ctx context.Context, agentID, tenantID string, tokenType TokenType) (
 //
 // Returns nil if no canary was found (the common case).
 func CheckOutbound(ctx context.Context, tenantID, content string) *TriggerResult {
-	if queue.Client == nil {
-		return nil
-	}
-
-	// Retrieve all active canary token values for this tenant
-	tokenValues, err := queue.Client.SMembers(ctx, tenantSetKey(tenantID)).Result()
-	if err != nil || len(tokenValues) == 0 {
+	if content == "" || tenantID == "" {
 		return nil
 	}
 
 	decodedSegments := unwrapCanaryEncodings(content)
+	contentMatches := func(tv string) bool {
+		if strings.Contains(content, tv) {
+			return true
+		}
+		for _, seg := range decodedSegments {
+			if strings.Contains(seg, tv) {
+				return true
+			}
+		}
+		return false
+	}
 
-	// Scan the outbound content (raw + decoded) for each token value.
-	// O(n*m) where n=canaries (small, typically 1–5) and m=content length.
-	// Acceptable on the hot path because n is bounded and the string scan is fast.
-	for _, tv := range tokenValues {
-		matched := strings.Contains(content, tv)
-		if !matched {
-			for _, seg := range decodedSegments {
-				if strings.Contains(seg, tv) {
-					matched = true
-					break
+	// 1. Check Redis when connected
+	if queue.Client != nil {
+		tokenValues, err := queue.Client.SMembers(ctx, tenantSetKey(tenantID)).Result()
+		if err == nil && len(tokenValues) > 0 {
+			for _, tv := range tokenValues {
+				if contentMatches(tv) {
+					meta, err := queue.Client.HGetAll(ctx, redisKey(tv)).Result()
+					if err != nil || len(meta) == 0 {
+						log.Printf("[CANARY] TRIGGER: token=%s tenant=%s (metadata expired)", tv, tenantID)
+						return &TriggerResult{TokenValue: tv, TenantID: tenantID}
+					}
+
+					injectedAt := time.Now().UTC()
+					if ts, ok := meta["created_at"]; ok {
+						if unixSec, parseErr := strconv.ParseInt(ts, 10, 64); parseErr == nil && unixSec > 0 {
+							injectedAt = time.Unix(unixSec, 0).UTC()
+						}
+					}
+
+					result := &TriggerResult{
+						TokenValue: tv,
+						AgentID:    meta["agent_id"],
+						TenantID:   tenantID,
+						InjectedAt: injectedAt,
+					}
+
+					log.Printf("[CANARY] TRIGGER: token=%s agent=%s tenant=%s — CRITICAL INCIDENT",
+						tv, result.AgentID, tenantID)
+
+					queue.Client.HSet(ctx, redisKey(tv), "triggered", "1", "triggered_at", time.Now().Unix())
+					return result
 				}
 			}
 		}
-		if matched {
-			// Canary triggered — retrieve metadata for the incident report
-			meta, err := queue.Client.HGetAll(ctx, redisKey(tv)).Result()
-			if err != nil || len(meta) == 0 {
-				// Token was found in content but metadata expired — still report it
-				log.Printf("[CANARY] TRIGGER: token=%s tenant=%s (metadata expired)", tv, tenantID)
-				return &TriggerResult{TokenValue: tv, TenantID: tenantID}
-			}
+	}
 
-			var injectedAt time.Time
-			if ts, ok := meta["created_at"]; ok {
-				if unix, err := fmt.Sscan(ts); err == nil {
-					_ = unix // parsed but stored as time.Time below
-				}
-				injectedAt = time.Now() // fallback if parse fails
-			}
-
-			result := &TriggerResult{
+	// 2. Fallback to in-memory store (standalone mode / unit tests)
+	now := time.Now().UTC()
+	localTokensMu.RLock()
+	defer localTokensMu.RUnlock()
+	for tv, tok := range localTokens {
+		if tok.TenantID != tenantID {
+			continue
+		}
+		if now.Sub(tok.CreatedAt) > 72*time.Hour {
+			continue
+		}
+		if contentMatches(tv) {
+			log.Printf("[CANARY] TRIGGER (in-memory): token=%s agent=%s tenant=%s — CRITICAL INCIDENT",
+				tv, tok.AgentID, tenantID)
+			return &TriggerResult{
 				TokenValue: tv,
-				AgentID:    meta["agent_id"],
-				TenantID:   tenantID,
-				InjectedAt: injectedAt,
+				AgentID:    tok.AgentID,
+				TenantID:   tok.TenantID,
+				InjectedAt: tok.CreatedAt,
 			}
-
-			log.Printf("[CANARY] TRIGGER: token=%s agent=%s tenant=%s — CRITICAL INCIDENT",
-				tv, result.AgentID, tenantID)
-
-			// Mark the canary as triggered in Redis so duplicate triggers from
-			// the same agent session do not generate duplicate incident reports.
-			queue.Client.HSet(ctx, redisKey(tv), "triggered", "1", "triggered_at", time.Now().Unix())
-
-			return result
 		}
 	}
 
@@ -268,13 +311,20 @@ func CheckOutbound(ctx context.Context, tenantID, content string) *TriggerResult
 // Revoke removes a canary token from active monitoring. Called after the
 // incident response is complete so the token no longer appears in future scans.
 func Revoke(ctx context.Context, tenantID, tokenValue string) error {
-	if queue.Client == nil {
-		return fmt.Errorf("Redis not available")
+	if tenantID == "" || tokenValue == "" {
+		return fmt.Errorf("tenantID and tokenValue are required")
 	}
-	pipe := queue.Client.Pipeline()
-	pipe.Del(ctx, redisKey(tokenValue))
-	pipe.SRem(ctx, tenantSetKey(tenantID), tokenValue)
-	_, err := pipe.Exec(ctx)
-	return err
+	localTokensMu.Lock()
+	delete(localTokens, tokenValue)
+	localTokensMu.Unlock()
+
+	if queue.Client != nil {
+		pipe := queue.Client.Pipeline()
+		pipe.Del(ctx, redisKey(tokenValue))
+		pipe.SRem(ctx, tenantSetKey(tenantID), tokenValue)
+		_, err := pipe.Exec(ctx)
+		return err
+	}
+	return nil
 }
 

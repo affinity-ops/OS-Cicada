@@ -91,10 +91,21 @@ case "$CODE" in 401|403) pass "request without credentials refused (HTTP $CODE)"
 
 echo "== 4. Admin routes refuse anonymous callers"
 if [ -n "${GATEWAY_SECRET:-}" ]; then
-  for route in "POST /v1/federation/providers" "GET /v1/internal/aegis/devices" "POST /v1/agent/$AGENT_ID/rotate" "GET /v1/shadow/agents" "POST /v1/portal/test-push" "POST /v1/sandbox/report"; do
+  for route in "POST /v1/federation/providers" "GET /v1/internal/aegis/devices" "POST /v1/agent/$AGENT_ID/rotate" "GET /v1/shadow/agents" "POST /v1/portal/test-push" "POST /v1/sandbox/report" "POST /v1/admin/canary/issue"; do
     req ${route% *} "${route#* }" -H 'Content-Type: application/json' -d '{}'
     expect "anonymous ${route}" 401 "$CODE" "$BODY"
   done
+
+  echo "== 4b. Canary Honeytoken Issue & Revoke"
+  req POST /v1/admin/canary/issue "${SECRET_HDR[@]}" -H 'Content-Type: application/json' \
+    -d "{\"agent_id\":\"$AGENT_ID\",\"tenant_id\":\"$TENANT_ID\",\"token_type\":\"APIKEY\"}"
+  expect "issue canary honeytoken" 201 "$CODE" "$BODY"
+  CANARY_TOK=$(echo "$BODY" | jfield token)
+  [ -n "$CANARY_TOK" ] && pass "canary token generated ($CANARY_TOK)" || fail "no canary token in response"
+
+  req POST /v1/admin/canary/revoke "${SECRET_HDR[@]}" -H 'Content-Type: application/json' \
+    -d "{\"tenant_id\":\"$TENANT_ID\",\"token\":\"$CANARY_TOK\"}"
+  expect "revoke canary honeytoken" 200 "$CODE" "$BODY"
 else
   echo "  SKIP  set GATEWAY_SECRET (and run the gateway with CICADA_INTERNAL_KEY) to test admin-route auth"
 fi

@@ -4,6 +4,7 @@
 package canary
 
 import (
+	"encoding/base64"
 	"strings"
 	"testing"
 )
@@ -43,33 +44,51 @@ func TestTenantSetKey_Format(t *testing.T) {
 	}
 }
 
-// ── Issue without Redis (fail path) ───────────────────────────────────────────
+// ── Issue / CheckOutbound / Revoke In-Memory Fallback (Nil Redis) ────────────
 
-func TestIssue_NilRedis_ReturnsError(t *testing.T) {
-	_, err := Issue(t.Context(), "agent-1", "tenant-1", TokenTypeAPIKey)
-	if err == nil {
-		t.Error("Issue with nil Redis should return error")
+func TestIssue_CheckOutbound_Revoke_InMemoryLifecycle(t *testing.T) {
+	ctx := t.Context()
+
+	// Empty agentID or tenantID returns error
+	if _, err := Issue(ctx, "", "tenant-1", TokenTypeAPIKey); err == nil {
+		t.Fatal("Issue with empty agentID should return error")
 	}
-	if !strings.Contains(err.Error(), "Redis") {
-		t.Errorf("error should mention Redis, got: %v", err)
+
+	tok, err := Issue(ctx, "agent-rogue-1", "tenant-acme-99", TokenTypeAPIKey)
+	if err != nil {
+		t.Fatalf("Issue failed in standalone in-memory mode: %v", err)
 	}
-}
-
-// ── CheckOutbound without Redis (fail-open) ───────────────────────────────────
-
-func TestCheckOutbound_NilRedis_ReturnsNil(t *testing.T) {
-	result := CheckOutbound(t.Context(), "tenant-1", "some content with CICADA_CANARY_APIKEY_acme12_a3f7b9c2d1e4f508")
-	if result != nil {
-		t.Error("CheckOutbound with nil Redis should return nil (fail-open)")
+	if !strings.HasPrefix(tok.Value, "CICADA_CANARY_APIKEY_tenant_") {
+		t.Fatalf("unexpected token format: %q", tok.Value)
 	}
-}
 
-// ── Revoke without Redis ──────────────────────────────────────────────────────
+	// Unissued token for another tenant returns nil
+	if res := CheckOutbound(ctx, "other-tenant", tok.Value); res != nil {
+		t.Fatalf("expected nil for mismatched tenant, got %+v", res)
+	}
 
-func TestRevoke_NilRedis_ReturnsError(t *testing.T) {
-	err := Revoke(t.Context(), "tenant-1", "CICADA_CANARY_APIKEY_acme12_a3f7b9c2d1e4f508")
-	if err == nil {
-		t.Error("Revoke with nil Redis should return error")
+	// Raw match triggers incident with exact AgentID & CreatedAt timestamp
+	res := CheckOutbound(ctx, "tenant-acme-99", `{"leak":"`+tok.Value+`"}`)
+	if res == nil {
+		t.Fatal("expected CheckOutbound to detect issued canary token")
+	}
+	if res.AgentID != "agent-rogue-1" || res.TokenValue != tok.Value || res.InjectedAt.IsZero() {
+		t.Fatalf("unexpected TriggerResult: %+v", res)
+	}
+
+	// Base64-encoded match also triggers incident
+	b64 := base64.StdEncoding.EncodeToString([]byte(tok.Value))
+	resB64 := CheckOutbound(ctx, "tenant-acme-99", `{"payload":"`+b64+`"}`)
+	if resB64 == nil || resB64.TokenValue != tok.Value {
+		t.Fatalf("expected CheckOutbound to detect Base64-encoded canary token, got %+v", resB64)
+	}
+
+	// Revoke removes token from active monitoring
+	if err := Revoke(ctx, "tenant-acme-99", tok.Value); err != nil {
+		t.Fatalf("Revoke failed: %v", err)
+	}
+	if after := CheckOutbound(ctx, "tenant-acme-99", tok.Value); after != nil {
+		t.Fatalf("expected nil after Revoke, got %+v", after)
 	}
 }
 

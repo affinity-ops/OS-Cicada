@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/asai/cicada/sentry/internal/auth"
+	"github.com/asai/cicada/sentry/internal/license"
 	"github.com/asai/cicada/sentry/internal/store"
 )
 
@@ -103,5 +104,18 @@ func authorizeRegistration(r *http.Request, spec *auth.AgentSpecification) (int,
 		return http.StatusForbidden, `{"error":"tenant_id does not match the agent's registered tenant"}`
 	}
 	spec.TenantID = tenantID
+
+	// Enforce license capacity limit (MaxAgents) when configured.
+	if maxAgents := license.GetMaxAgents(); maxAgents > 0 && store.DB != nil {
+		var activeCount int
+		_ = store.DB.QueryRow(r.Context(),
+			`SELECT COUNT(*) FROM agents WHERE revoked_at IS NULL AND id::text != $1`,
+			spec.AgentID,
+		).Scan(&activeCount)
+		if activeCount >= maxAgents {
+			return http.StatusForbidden, fmt.Sprintf(`{"error":"license capacity limit reached (max_agents=%d)"}`, maxAgents)
+		}
+	}
+
 	return 0, ""
 }

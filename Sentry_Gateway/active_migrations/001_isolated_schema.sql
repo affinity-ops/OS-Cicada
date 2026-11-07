@@ -144,3 +144,84 @@ DROP TRIGGER IF EXISTS trg_rotation_events_immutable ON credential_rotation_even
 CREATE TRIGGER trg_rotation_events_immutable
 BEFORE DELETE OR UPDATE ON credential_rotation_events
 FOR EACH ROW EXECUTE FUNCTION prevent_rotation_event_updates();
+
+-- S6.2: Enterprise SAML 2.0 / OIDC Federation Configuration
+CREATE TABLE IF NOT EXISTS federation_providers (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id       UUID NOT NULL, -- references public.tenants
+    name            VARCHAR(255) NOT NULL,
+    protocol        VARCHAR(10) NOT NULL CHECK (protocol IN ('saml', 'oidc')),
+    enabled         BOOLEAN NOT NULL DEFAULT true,
+    saml_entity_id       TEXT,
+    saml_sso_url         TEXT,
+    saml_slo_url         TEXT,
+    saml_certificate     TEXT,
+    saml_name_id_format  VARCHAR(255) DEFAULT 'urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress',
+    oidc_issuer_url      TEXT,
+    oidc_client_id       TEXT,
+    oidc_client_secret   TEXT,
+    oidc_scopes          TEXT DEFAULT 'openid profile email',
+    oidc_redirect_uri    TEXT,
+    default_role         VARCHAR(50) DEFAULT 'viewer',
+    allowed_domains      TEXT[],
+    auto_provision       BOOLEAN DEFAULT false,
+    created_at      TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    updated_at      TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT unique_tenant_provider UNIQUE (tenant_id, name)
+);
+CREATE INDEX IF NOT EXISTS idx_federation_tenant_protocol
+    ON federation_providers(tenant_id, protocol) WHERE enabled = true;
+
+CREATE TABLE IF NOT EXISTS federated_sessions (
+    id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id        UUID NOT NULL,
+    provider_id      UUID NOT NULL REFERENCES federation_providers(id) ON DELETE CASCADE,
+    subject          TEXT NOT NULL,
+    email            TEXT,
+    display_name     TEXT,
+    groups           TEXT[],
+    raw_attributes   JSONB,
+    session_token    TEXT NOT NULL,
+    expires_at       TIMESTAMPTZ NOT NULL,
+    ip_address       INET,
+    user_agent       TEXT,
+    created_at       TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_federated_sessions_token
+    ON federated_sessions(session_token);
+CREATE INDEX IF NOT EXISTS idx_federated_sessions_subject
+    ON federated_sessions(tenant_id, subject);
+
+CREATE TABLE IF NOT EXISTS federation_audit_log (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id       UUID NOT NULL,
+    provider_id     UUID REFERENCES federation_providers(id),
+    event_type      VARCHAR(50) NOT NULL
+        CHECK (event_type IN ('login_success', 'login_failure', 'logout', 'token_refresh',
+                               'provider_created', 'provider_updated', 'provider_disabled')),
+    subject         TEXT,
+    email           TEXT,
+    ip_address      INET,
+    user_agent      TEXT,
+    error_detail    TEXT,
+    created_at      TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_federation_audit_tenant
+    ON federation_audit_log(tenant_id, created_at DESC);
+
+-- S6.3: IdP Group -> Cicada Role Mapping
+CREATE TABLE IF NOT EXISTS role_mappings (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    provider_id     UUID NOT NULL REFERENCES federation_providers(id) ON DELETE CASCADE,
+    tenant_id       UUID NOT NULL,
+    idp_group       TEXT NOT NULL,
+    cicada_role     VARCHAR(50) NOT NULL
+        CHECK (cicada_role IN ('guest', 'viewer', 'operator', 'admin', 'super_admin')),
+    priority        INTEGER NOT NULL DEFAULT 0,
+    description     TEXT,
+    created_at      TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    updated_at      TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT unique_provider_group UNIQUE (provider_id, idp_group)
+);
+CREATE INDEX IF NOT EXISTS idx_role_mappings_provider
+    ON role_mappings(provider_id, priority DESC);
