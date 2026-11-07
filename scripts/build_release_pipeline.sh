@@ -1,5 +1,5 @@
 #!/bin/bash
-# © 2026 Affinity Ops Ltd.
+# © 2026 Patrick Matthews (Affinity Ops / Affinity Smart AI)
 # SPDX-License-Identifier: Apache-2.0
 
 # Automates the building and PQC cryptographic signing of Cicada platform binaries.

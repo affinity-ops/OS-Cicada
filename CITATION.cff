@@ -4,7 +4,7 @@ title: "Cicada: Zero-Trust Runtime Enforcement Gateway & Matthews Enforcement Fr
 authors:
   - family-names: "Matthews"
     given-names: "Patrick"
-    affiliation: "Affinity Ops Ltd."
+    affiliation: "Patrick Matthews (Affinity Ops / Affinity Smart AI)"
 version: "1.0.0"
 date-released: "2026-10-15"
 license: "Apache-2.0"
@@ -15,9 +15,9 @@ preferred-citation:
   authors:
     - family-names: "Matthews"
       given-names: "Patrick"
-      affiliation: "Affinity Ops Ltd."
+      affiliation: "Patrick Matthews (Affinity Ops / Affinity Smart AI)"
   title: "The Matthews Enforcement Framework (MEF): A Deterministic Mathematical Model for Zero-Trust Autonomous Agent Governance"
-  institution: "Affinity Ops Ltd."
+  institution: "Patrick Matthews (Affinity Ops / Affinity Smart AI)"
   year: 2026
   doi: "10.5281/zenodo.19597120"
   url: "https://papers.ssrn.com/sol3/papers.cfm?abstract_id=6612798"

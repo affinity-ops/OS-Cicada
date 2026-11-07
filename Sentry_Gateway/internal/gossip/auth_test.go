@@ -1,4 +1,4 @@
-// Copyright 2026 Patrick Matthews and Affinity Ops Ltd.
+// Copyright 2026 Patrick Matthews and Patrick Matthews (Affinity Ops / Affinity Smart AI)
 // SPDX-License-Identifier: Apache-2.0
 
 package gossip

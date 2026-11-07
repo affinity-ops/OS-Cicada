@@ -1,4 +1,4 @@
-// © 2026 Affinity Ops Ltd.
+// © 2026 Patrick Matthews (Affinity Ops / Affinity Smart AI)
 // Proprietary and confidential. Unauthorized copying or distribution prohibited.
 
 // Package output — exfiltration sub-module.

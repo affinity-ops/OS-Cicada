@@ -1,10 +1,10 @@
 Cicada: Zero-Trust Runtime Enforcement Gateway & Matthews Enforcement Framework (MEF)
-Copyright 2026 Patrick Matthews and Affinity Ops Ltd.
+Copyright 2026 Patrick Matthews (Affinity Ops / Affinity Smart AI)
 
 This product includes software, architectural specifications, and runtime
 enforcement models originally conceived, architected, and developed by:
 
-  Original Creator & Systems Architect: Patrick Matthews (Affinity Ops Ltd.)
+  Original Creator & Systems Architect: Patrick Matthews (Affinity Ops / Affinity Smart AI)
   Source Repository: https://github.com/affinity-ops/OS-Cicada
 
 Pursuant to Section 4(c) and Section 4(d) of the Apache License, Version 2.0,
@@ -14,7 +14,7 @@ other locations where third-party notices normally appear:
 
   "Includes the Cicada Zero-Trust Agent Gateway and the Matthews Enforcement
    Framework (MEF), originally architected and developed by Patrick Matthews
-   (Affinity Ops Ltd.)."
+   (Affinity Ops / Affinity Smart AI)."
 
 Academic & Prior-Art Reference (Informational):
   Matthews, P. (2026). The Matthews Enforcement Framework (MEF): A Deterministic

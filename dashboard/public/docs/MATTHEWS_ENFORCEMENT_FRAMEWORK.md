@@ -1,6 +1,6 @@
 # The Matthews Enforcement Framework: A Prospective, Path-Dependent Architecture for Runtime AI Agent Governance
 
-**Author:** Patrick Matthews, Affinity Ops Ltd
+**Author:** Patrick Matthews, Patrick Matthews (Affinity Ops / Affinity Smart AI)
 **Published:** 4 June 2026
 **Status:** White Paper (Part 1 & 2)
 
@@ -212,4 +212,4 @@ Cicada's architecture is designed for deployment as a **governance sidecar** —
 
 ---
 
-*Matthews Enforcement Framework © 2026 Affinity Ops Ltd.*
+*Matthews Enforcement Framework © 2026 Patrick Matthews (Affinity Ops / Affinity Smart AI)*

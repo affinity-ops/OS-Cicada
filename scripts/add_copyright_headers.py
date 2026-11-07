@@ -15,38 +15,38 @@ import sys
 
 PROJECT_ROOT = "/Users/patrickmatthews/Downloads/Web Dev - Patrick/Cicada Project"
 
-HEADER_GO = """// © 2026 Affinity Ops Ltd.
+HEADER_GO = """// © 2026 Patrick Matthews (Affinity Ops / Affinity Smart AI)
 // SPDX-License-Identifier: Apache-2.0
 """
 
-HEADER_DART = """// © 2026 Affinity Ops Ltd.
+HEADER_DART = """// © 2026 Patrick Matthews (Affinity Ops / Affinity Smart AI)
 // SPDX-License-Identifier: Apache-2.0
 """
 
-HEADER_PYTHON = """# © 2026 Affinity Ops Ltd.
+HEADER_PYTHON = """# © 2026 Patrick Matthews (Affinity Ops / Affinity Smart AI)
 # SPDX-License-Identifier: Apache-2.0
 """
 
 HEADER_PHP = """<?php
 /**
- * © 2026 Affinity Ops Ltd.
+ * © 2026 Patrick Matthews (Affinity Ops / Affinity Smart AI)
  * SPDX-License-Identifier: Apache-2.0
  */
 """
 
-HEADER_TS = """// © 2026 Affinity Ops Ltd.
+HEADER_TS = """// © 2026 Patrick Matthews (Affinity Ops / Affinity Smart AI)
 // SPDX-License-Identifier: Apache-2.0
 """
 
-HEADER_TSX = """// © 2026 Affinity Ops Ltd.
+HEADER_TSX = """// © 2026 Patrick Matthews (Affinity Ops / Affinity Smart AI)
 // SPDX-License-Identifier: Apache-2.0
 """
 
-HEADER_JS = """// © 2026 Affinity Ops Ltd.
+HEADER_JS = """// © 2026 Patrick Matthews (Affinity Ops / Affinity Smart AI)
 // SPDX-License-Identifier: Apache-2.0
 """
 
-HEADER_YAML = """# © 2026 Affinity Ops Ltd.
+HEADER_YAML = """# © 2026 Patrick Matthews (Affinity Ops / Affinity Smart AI)
 # SPDX-License-Identifier: Apache-2.0
 """
 

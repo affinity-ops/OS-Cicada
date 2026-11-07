@@ -323,10 +323,10 @@ This project is licensed under the **Apache License, Version 2.0** ([LICENSE](./
 
 Pursuant to **Apache License 2.0 Section 4(c) and Section 4(d)**, any redistribution of this Work or Derivative Works must retain the [NOTICE](./NOTICE) file and reproduce its attribution notice in documentation or locations where third-party notices normally appear:
 
-> *"Includes the Cicada Zero-Trust Agent Gateway and the Matthews Enforcement Framework (MEF), originally architected and developed by **Patrick Matthews** (Affinity Ops Ltd.)."*
+> *"Includes the Cicada Zero-Trust Agent Gateway and the Matthews Enforcement Framework (MEF), originally architected and developed by **Patrick Matthews** (Affinity Ops / Affinity Smart AI)."*
 
 ```text
-Copyright 2026 Patrick Matthews and Affinity Ops Ltd.
+Copyright 2026 Patrick Matthews (Affinity Ops / Affinity Smart AI)
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.

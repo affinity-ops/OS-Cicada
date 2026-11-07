@@ -3,7 +3,7 @@
 **Date:** 10 June 2026
 **Author:** Antigravity Pair Programming Session
 **Status:** Active — sourced from live codebase inspection
-**Classification:** Confidential — Affinity Ops Ltd
+**Classification:** Confidential — Patrick Matthews (Affinity Ops / Affinity Smart AI)
 
 > This document provides detailed technical architecture specifications for five subsystems that are referenced but not fully detailed in the MEF white paper or Security Audit documentation. Every fact is sourced from codebase inspection performed on 2026-06-10.
 
@@ -667,4 +667,4 @@ The gateway validates the hash in-process (`sha256(rawToken)`) without DB roundt
 
 ---
 
-*Cicada Platform · Confidential · 10 June 2026 · Affinity Ops Ltd*
+*Cicada Platform · Confidential · 10 June 2026 · Patrick Matthews (Affinity Ops / Affinity Smart AI)*

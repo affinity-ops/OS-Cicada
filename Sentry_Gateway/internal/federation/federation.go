@@ -1,4 +1,4 @@
-// © 2026 Affinity Ops Ltd.
+// © 2026 Patrick Matthews (Affinity Ops / Affinity Smart AI)
 // SPDX-License-Identifier: Apache-2.0
 
 // Package federation implements SAML 2.0 / OIDC enterprise SSO (S6.2).

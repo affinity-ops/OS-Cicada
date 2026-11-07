@@ -1,6 +1,6 @@
 <?php
 /**
- * © 2026 Affinity Ops Ltd.
+ * © 2026 Patrick Matthews (Affinity Ops / Affinity Smart AI)
  * SPDX-License-Identifier: Apache-2.0
  *
  * Aegis Trace Log — full decision chain for every Aegis reasoning cycle.
