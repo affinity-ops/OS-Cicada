@@ -67,10 +67,10 @@ jobs:
           go-version-file: Sentry_Gateway/go.mod
           cache-dependency-path: Sentry_Gateway/go.sum
 
-      - name: Set up PHP 8.3
+      - name: Set up PHP 8.4
         uses: shivammathur/setup-php@v2
         with:
-          php-version: '8.3'
+          php-version: '8.4'
           extensions: mbstring, xml, ctype, json, pdo, pdo_pgsql, pgsql, redis
           coverage: none
 
@@ -80,7 +80,7 @@ jobs:
       - name: Migrate & seed Core API (PostgreSQL)
         working-directory: Core_API
         run: |
-          composer install --no-interaction --prefer-dist --no-progress
+          composer install --no-interaction --prefer-dist --no-progress --ignore-platform-reqs
           cp .env.example .env
           sed -i 's/^DB_CONNECTION=.*/DB_CONNECTION=pgsql/' .env
           sed -i 's/^# *DB_HOST=.*/DB_HOST=127.0.0.1/' .env
@@ -124,6 +124,12 @@ jobs:
           export TENANT_ID="${IDS#* }"
           export GATEWAY="http://localhost:8080"
           export GATEWAY_SECRET="ci-gateway-secret"
+          set +e
           ./scripts/e2e_production.sh
-
+          RC=$?
           kill "$GW_PID" "$API_PID" 2>/dev/null || true
+          if [ "$RC" -ne 0 ]; then
+            echo "=== /tmp/sentry.log ===" && tail -n 80 /tmp/sentry.log || true
+            echo "=== /tmp/core_api.log ===" && tail -n 80 /tmp/core_api.log || true
+          fi
+          exit "$RC"
