@@ -1,5 +1,5 @@
 % © 2026 Patrick Matthews (Affinity Ops / Affinity Smart AI)
-% SPDX-License-Identifier: Apache-2.0
+% Paper License: CC-BY-4.0 | Software License: Apache-2.0
 
 \documentclass[11pt, a4paper]{article}
 
@@ -51,9 +51,10 @@
     \textit{ASAI --- affinitysmartai.co.uk}\\
     \texttt{info@affinitysmartai.co.uk}\\[0.3em]
     \small Repository: \url{https://github.com/affinity-ops/OS-Cicada} (Tag \texttt{v1.0.4})\\
-    \small SSRN Preprint: \url{https://papers.ssrn.com/sol3/papers.cfm?abstract_id=6612798}%
+    \small Zenodo Concept DOI: \url{https://doi.org/10.5281/zenodo.20592732} (Version~3: \url{https://doi.org/10.5281/zenodo.24053477})\\
+    \small SSRN Preprint DOI: \url{https://doi.org/10.2139/ssrn.6898119}%
 }
-\date{8 November 2026 \quad \small(Original Version 2 published 8 June 2026)}
+\date{8 November 2026 \quad \small(Original Version 2 published 8 June 2026; Paper License: CC~BY~4.0)}
 
 % =============================================================================
 \begin{document}
@@ -94,7 +95,7 @@ Autonomous AI agents interact with external APIs, databases, and peer agents at 
     \item \textbf{Cryptographic Approval Binding:} When a high-risk action is escalated to a human operator, is the human's out-of-band approval cryptographically bound to the exact HTTP method, canonical destination URL, and payload bytes that the gateway will forward, and is the destination IP pinned against DNS rebinding?
 \end{enumerate}
 
-Version~2 of this paper (8~June 2026)~\cite{matthewsv2} introduced the Matthews Enforcement Framework (MEF)~\cite{mef2026} and reported initial benchmarks from an internal preproduction build. Following the public open-source release of the reference implementation (\url{https://github.com/affinity-ops/OS-Cicada}) in November 2026 (release tag \texttt{v1.0.4}), this Version~3 revision updates the paper so that every architectural description, threshold, test count, and maturity claim aligns strictly with the publicly inspectable source code, \texttt{RELEASE\_SCOPE.md}, and automated continuous integration (CI) pipeline.
+Version~2 of this paper (8~June 2026)~\cite{matthewsv2} introduced the Matthews Enforcement Framework (MEF)~\cite{mef2026} and reported initial benchmarks from an internal preproduction build. Following the public open-source release of the reference implementation (\url{https://github.com/affinity-ops/OS-Cicada}) in November 2026 (release tag \texttt{v1.0.4}), this Version~3 revision updates the paper so that every architectural description, threshold, test count, and maturity claim aligns strictly with the publicly inspectable source code, \texttt{RELEASE\_SCOPE.md}, and automated continuous integration (CI) pipeline. \emph{(Note on Zenodo version numbering: under the Zenodo concept DOI \texttt{10.5281/zenodo.20592732}, the June 2026 paper is archived as Zenodo version \texttt{v1} even though the paper text calls it Version~2, whereas this November 2026 paper is archived as \texttt{Version~3} at \texttt{10.5281/zenodo.24053477}.)}
 
 \subsection{Headline Claims Supported by the Public Evidence}
 \label{subsec:headline-claims}
@@ -149,7 +150,7 @@ Table~\ref{tab:changelog} lists the twelve substantive corrections made between 
 \addlinespace
 9.~Related work \& standards & ``Recent industry analyses'' cites a 2022 report & Uses exact OWASP Agentic Top~10 (Dec 2025) names (\texttt{ASI04: Agentic Supply Chain Vulnerabilities}, \texttt{ASI07: Insecure Inter-Agent Communication}), NIST AI Agent Standards Initiative (17~Feb 2026), RFC~8693 vs.\ IETF \texttt{ID-JAG}, CaMeL, Rule of Two, and Nasr et al. & Current primary sources and exact standard identifiers \\
 \addlinespace
-10.~Archival links & Cited an unpublished Zenodo DOI (\texttt{10.5281/zenodo.19597120}) & Removes unresolvable Zenodo DOI across paper, \texttt{README.md}, and \texttt{CITATION.cff}, linking directly to GitHub (\url{https://github.com/affinity-ops/OS-Cicada}) and SSRN (\texttt{6612798}) & Ensures every link resolves cleanly \\
+10.~Archival \& repository links & Cited an earlier pre-release Zenodo placeholder identifier & Updates all archival links across the paper, \texttt{README.md}, \texttt{NOTICE}, and \texttt{CITATION.cff} to the published Zenodo concept DOI (\texttt{10.5281/zenodo.20592732}), the Version~3 Zenodo DOI (\texttt{10.5281/zenodo.24053477}), the June 2026 SSRN DOI (\texttt{10.2139/ssrn.6898119}), and GitHub (\url{https://github.com/affinity-ops/OS-Cicada}, tag \texttt{v1.0.4}) & Ensures every archival DOI and repository link resolves cleanly \\
 \addlinespace
 11.~CIBA canonicalisation \& IP pinning & Informal \texttt{SHA-256(Method|URL|Body)} description & Specifies decimal length-prefixed commitment with \texttt{CanonicalizeURL}, \texttt{TraceID} hold-nonce check, full untruncated payload preview, header stripping, and \texttt{DialContext} IP pinning & Documents exact code in \texttt{internal/ciba/ciba.go} and \texttt{cmd/sentry/main.go} \\
 \addlinespace
@@ -536,8 +537,8 @@ We have presented Version~3 of our path-dependent runtime governance architectur
 
 \bibitem{matthewsv2}
 P.~Matthews.
-\newblock A Path-Dependent, Multi-Layered Architecture for Runtime Governance and Post-Quantum Cryptographic Assurance of Autonomous AI Agents (Version 2).
-\newblock SSRN Preprint~6612798 (\url{https://papers.ssrn.com/sol3/papers.cfm?abstract_id=6612798}), June 2026.
+\newblock A Path-Dependent, Multi-Layered Architecture for Runtime Governance and Post-Quantum Cryptographic Assurance of Autonomous AI Agents (Version 2, archived as Zenodo \texttt{v1}; Version 3 archived at \url{https://doi.org/10.5281/zenodo.24053477}).
+\newblock Zenodo Concept DOI: \url{https://doi.org/10.5281/zenodo.20592732}; SSRN Preprint DOI: \url{https://doi.org/10.2139/ssrn.6898119} (\url{https://papers.ssrn.com/sol3/papers.cfm?abstract_id=6898119}), June 2026 / November 2026.
 
 \bibitem{mef2026}
 P.~Matthews.

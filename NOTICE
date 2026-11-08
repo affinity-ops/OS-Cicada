@@ -20,7 +20,8 @@ Academic & Prior-Art Reference (Informational):
   Matthews, P. (2026). The Matthews Enforcement Framework (MEF) & Path-Dependent
   Architecture for Runtime Governance of Autonomous AI Agents (Version 3).
   - Repository Paper: /docs/PATH_DEPENDENT_ARCHITECTURE_v3.md
-  - SSRN ID: https://papers.ssrn.com/sol3/papers.cfm?abstract_id=6612798
+  - Zenodo Concept DOI: https://doi.org/10.5281/zenodo.20592732 (Version 3: https://doi.org/10.5281/zenodo.24053477)
+  - SSRN DOI: https://doi.org/10.2139/ssrn.6898119 (https://papers.ssrn.com/sol3/papers.cfm?abstract_id=6898119)
   - Technical Specification: /docs/MATTHEWS_ENFORCEMENT_FRAMEWORK.md
 
 In accordance with Section 4(d) of the Apache License, Version 2.0, the contents

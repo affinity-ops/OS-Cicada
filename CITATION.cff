@@ -10,6 +10,17 @@ authors:
     orcid: "https://orcid.org/0009-0000-2353-143X"
 repository-code: "https://github.com/affinity-ops/OS-Cicada"
 url: "https://github.com/affinity-ops/OS-Cicada"
+doi: "10.5281/zenodo.20592732"
+identifiers:
+  - type: doi
+    value: "10.5281/zenodo.20592732"
+    description: "Zenodo Concept DOI (cite all versions)"
+  - type: doi
+    value: "10.5281/zenodo.24053477"
+    description: "Zenodo Version 3 DOI"
+  - type: doi
+    value: "10.2139/ssrn.6898119"
+    description: "SSRN Preprint DOI (June 2026 Version 2)"
 license: Apache-2.0
 version: "1.0.4"
 date-released: "2026-11-08"
@@ -24,12 +35,14 @@ keywords:
   - runtime-security
 preferred-citation:
   type: article
-  title: "A Path-Dependent, Multi-Layered Architecture for Runtime Governance and Post-Quantum Cryptographic Assurance of Autonomous AI Agents"
+  title: "A Path-Dependent, Multi-Layered Architecture for Runtime Governance and Post-Quantum Cryptographic Assurance of Autonomous AI Agents (Version 3)"
   authors:
     - given-names: Patrick
       family-names: Matthews
       affiliation: "Affinity Ops (Affinity Smart AI)"
       orcid: "https://orcid.org/0009-0000-2353-143X"
-  url: "https://github.com/affinity-ops/OS-Cicada/blob/main/docs/PATH_DEPENDENT_ARCHITECTURE_v3.md"
+  doi: "10.5281/zenodo.20592732"
+  url: "https://doi.org/10.5281/zenodo.20592732"
+  license: CC-BY-4.0
   year: 2026
   month: 11
