@@ -468,7 +468,7 @@ export function teardown(data) {
     console.log('  cicada_injection_blocks_total  — Injection scanner blocks');
     console.log('  cicada_exfiltration_blocks_total — Exfiltration scanner blocks');
     console.log('');
-    console.log('Compare these results against the Production Hardening Roadmap');
-    console.log('(Buyers_Deployment_Guide.md Section 31) to establish baseline');
+    console.log('Compare these results against docs/PATH_DEPENDENT_ARCHITECTURE_v3.md');
+    console.log('(Section 6.2) to evaluate warm-cache vs cold-cache latency');
     console.log('metrics before implementing Item 3 (Redis Policy Cache).');
 }

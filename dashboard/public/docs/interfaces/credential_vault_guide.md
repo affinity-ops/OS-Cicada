@@ -280,4 +280,4 @@ Meanwhile, your tenants' agent-facing keys (OpenAI, Anthropic) flow through a pa
 
 ---
 
-*This guide is part of the Cicada Operator Manual. For technical details, see the companion [Credential Vault Forensic Audit](./credential_vault_forensic_audit.md).*
+*This guide is part of the Cicada Operator Manual. For architecture and cryptographic boundary details, see [Path-Dependent Architecture (v3)](../PATH_DEPENDENT_ARCHITECTURE_v3.md).*

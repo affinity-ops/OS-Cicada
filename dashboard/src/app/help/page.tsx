@@ -22,10 +22,10 @@ const DOCUMENTATION_REGISTRY = [
   {
     category: "Architecture & Spec",
     docs: [
+      { id: "v3-paper", title: "Path-Dependent Architecture (v3 Paper)", file: "PATH_DEPENDENT_ARCHITECTURE_v3.md" },
       { id: "mef", title: "Matthews Enforcement Framework", file: "MATTHEWS_ENFORCEMENT_FRAMEWORK.md" },
-      { id: "swarm", title: "Swarm Verification Architecture", file: "cicada_swarm_architecture_spec.md" },
-      { id: "gateway", title: "Architecture Deep Dive", file: "ARCHITECTURE_DEEP_DIVE.md" },
-      { id: "registry", title: "Verified Agent Registry Spec", file: "verified_agent_registry_spec.md" },
+      { id: "eakf", title: "Ephemeral Agent Kernel Firewall (EAKF)", file: "EPHEMERAL_AGENT_KERNEL_FIREWALL.md" },
+      { id: "p2p", title: "P2P Gossip & Threat Mesh Whitepaper", file: "CICADA_P2P_ARCHITECTURE_WHITEPAPER.md" },
       { id: "boilerplate", title: "Boilerplate Scaffolding Architecture", file: "architecture/Boilerplate_Scaffolding_Architecture.md" }
     ]
   },

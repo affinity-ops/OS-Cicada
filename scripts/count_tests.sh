@@ -29,14 +29,14 @@ TS_JS_FILES=$(find Developer_Portal/src dashboard/src Cicada_SDK/node/src -type 
 TS_JS_TESTS=$(grep -rn -E "^[[:space:]]*(it|test)\(" Developer_Portal/src dashboard/src Cicada_SDK/node/src | wc -l | tr -d ' ')
 
 DART_FILES=$(find Ciba_Flutter_App/test -name "*_test.dart" | wc -l | tr -d ' ')
-DART_TESTS=$(grep -rn -E "^[[:space:]]*(test|testWidgets)\(" Ciba_Flutter_App/test | wc -l | tr -d ' ')
+DART_TESTS=$(grep -rn -E "\b(test|testWidgets)\(" Ciba_Flutter_App/test --include="*_test.dart" | wc -l | tr -d ' ')
 
 TOTAL_FILES=$((GO_SENTRY_FILES + GO_OTHER_FILES + PHP_FILES + PY_FILES + TS_JS_FILES + DART_FILES))
 TOTAL_TOP_LEVEL=$((GO_SENTRY_TESTS + GO_OTHER_TESTS + PHP_TESTS + PY_TESTS + TS_JS_TESTS + DART_TESTS))
 
 cat <<EOF
 ====================================================================
-OS-Cicada Reproducible Test Suite Summary
+OS-Cicada Reproducible Test Suite Summary (Static Definition Counts)
 ====================================================================
 Go (Sentry_Gateway)                 : ${GO_SENTRY_TESTS} top-level tests (${GO_SENTRY_FILES} files, +${GO_SENTRY_SUBTESTS} t.Run calls, ${GO_CORPUS_CASES} adversarial corpus cases, ${GO_SENTRY_BENCH} benchmarks)
 Go (Shadow_Sandbox, Mesh, Licensing): ${GO_OTHER_TESTS} top-level tests (${GO_OTHER_FILES} files)
@@ -49,3 +49,26 @@ Total Test Files                    : ${TOTAL_FILES}
 Total Top-Level Test Definitions    : ${TOTAL_TOP_LEVEL}
 ====================================================================
 EOF
+
+if [[ "${1:-}" == "--check" ]]; then
+  FAIL=0
+  assert_eq() {
+    local label="$1" actual="$2" expected="$3"
+    if [[ "$actual" != "$expected" ]]; then
+      echo "ERROR: ${label} count mismatch: got ${actual}, expected ${expected}" >&2
+      FAIL=1
+    fi
+  }
+  assert_eq "Go (Sentry_Gateway) tests" "$GO_SENTRY_TESTS" "760"
+  assert_eq "Go (Companion) tests" "$GO_OTHER_TESTS" "50"
+  assert_eq "PHP tests" "$PHP_TESTS" "82"
+  assert_eq "Python tests" "$PY_TESTS" "174"
+  assert_eq "TS/JS tests" "$TS_JS_TESTS" "179"
+  assert_eq "Dart tests" "$DART_TESTS" "54"
+  assert_eq "Total test files" "$TOTAL_FILES" "104"
+  assert_eq "Total top-level test definitions" "$TOTAL_TOP_LEVEL" "1299"
+  if [[ "$FAIL" -ne 0 ]]; then
+    exit 1
+  fi
+  echo "✓ All static test definition counts match expected v1.0.3 figures (1,299 across 104 files)."
+fi

@@ -79,8 +79,8 @@ class AlertBloc extends Cubit<AlertState> {
         final status = data['status'] as String?;
         if (status == 'revoked' || status == 'suspended') {
           // CRITICAL: Stop heartbeat and purge credentials so the splash
-          // screen routes to QR scanner on next launch. This breaks the
-          // infinite loop from Post-Mortem D.
+          // screen routes to QR scanner on next launch, preventing a
+          // revoked-device heartbeat retry loop.
           _heartbeatTimer?.cancel();
           _heartbeatTimer = null;
           await secureStorage.delete(AppConstants.keyPairedStatus);

@@ -86,7 +86,7 @@ class PairingBloc extends Cubit<PairingState> {
   ///
   /// Called BEFORE generating new keys (to prevent stale key caching)
   /// and when the Gateway reports a revoked/suspended status.
-  /// This is the fix for Post-Mortem D: "The Infinite Loop".
+  /// Prevents stale-credential re-pairing loops.
   Future<void> resetPairingState() async {
     await secureStorage.delete(AppConstants.keyPairedStatus);
     await secureStorage.delete(AppConstants.keyGatewayUrl);
