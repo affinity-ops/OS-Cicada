@@ -5,7 +5,7 @@ SPDX-License-Identifier: Apache-2.0
 # A Path-Dependent, Multi-Layered Architecture for Runtime Governance and Post-Quantum Cryptographic Assurance of Autonomous AI Agents (Version 3)
 
 **Author:** Patrick Matthews  
-**Affiliation:** ASAI — `affinitysmartai.co.uk` (`contact@affinitysmartai.co.uk`)  
+**Affiliation:** ASAI — `affinitysmartai.co.uk` (`info@affinitysmartai.co.uk`)  
 **Date:** 7 November 2026 (Revision 3; original Version 2 published 8 June 2026)  
 **Repository Release:** [`https://github.com/affinity-ops/OS-Cicada`](https://github.com/affinity-ops/OS-Cicada) — Tag **`v1.0.3`**  
 **SSRN Preprint ID:** [`https://papers.ssrn.com/sol3/papers.cfm?abstract_id=6612798`](https://papers.ssrn.com/sol3/papers.cfm?abstract_id=6612798)  
