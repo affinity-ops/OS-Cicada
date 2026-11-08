@@ -24,7 +24,7 @@
 % --- Header/Footer ---
 \pagestyle{fancy}
 \fancyhf{}
-\fancyhead[L]{\small\textit{Path-Dependent Runtime AI Governance (Version 3 --- Open-Source Release \texttt{v1.0.3})}}
+\fancyhead[L]{\small\textit{Path-Dependent Runtime AI Governance (Version 3 --- Open-Source Release \texttt{v1.0.4})}}
 \fancyhead[R]{\small\textit{Matthews, November 2026}}
 \fancyfoot[C]{\thepage}
 \renewcommand{\headrulewidth}{0.4pt}
@@ -44,16 +44,16 @@
 % --- Title ---
 \title{%
     \textbf{A Path-Dependent, Multi-Layered Architecture for Runtime Governance and Post-Quantum Cryptographic Assurance of Autonomous AI Agents}\\[0.5em]
-    \large Version 3 --- Open-Source Reference Implementation Alignment (\texttt{v1.0.3})%
+    \large Version 3 --- Open-Source Reference Implementation Alignment (\texttt{v1.0.4})%
 }
 \author{%
     Patrick Matthews\\
     \textit{ASAI --- affinitysmartai.co.uk}\\
     \texttt{info@affinitysmartai.co.uk}\\[0.3em]
-    \small Repository: \url{https://github.com/affinity-ops/OS-Cicada} (Tag \texttt{v1.0.3})\\
+    \small Repository: \url{https://github.com/affinity-ops/OS-Cicada} (Tag \texttt{v1.0.4})\\
     \small SSRN Preprint: \url{https://papers.ssrn.com/sol3/papers.cfm?abstract_id=6612798}%
 }
-\date{7 November 2026 \quad \small(Original Version 2 published 8 June 2026)}
+\date{8 November 2026 \quad \small(Original Version 2 published 8 June 2026)}
 
 % =============================================================================
 \begin{document}
@@ -69,7 +69,7 @@
 
 \noindent\textbf{Architecture:} This paper describes a reference architecture for runtime governance of autonomous agents: an HTTP and Model Context Protocol (MCP) proxy gateway (\texttt{Sentry\_Gateway}) that evaluates each proposed action against the agent's registered purpose and server-side tool manifest, its recent action history within the session, and the provenance of the content it has processed. The architecture combines deterministic controls --- fine-grained resource policy, forward-saga prerequisite sequencing, server-side per-tool HTTP-method and URL-pattern scoping, impact-weighted rate limits, outbound credential/PII exfiltration checks, session taint tracking across all untrusted external responses, and a SHA-256 hash-chained audit trail --- with mandatory out-of-band human approval via Client-Initiated Backchannel Authentication (CIBA). Each CIBA approval is cryptographically bound to a decimal length-prefixed SHA-256 commitment over the uppercase HTTP method, canonicalised target URL, and raw request body bytes, paired with a per-hold \texttt{TraceID} nonce and connection-time DNS IP pinning (\texttt{proxyTransport.DialContext}). While short-lived per-request agent tokens (5-minute JIT session JWTs and 24-hour EVARs) use compact 64-byte classical Ed25519 (\texttt{EdDSA}) signatures to avoid HTTP header bloat, three high-consequence governance boundaries --- human CIBA approval decisions, inter-gateway P2P gossip quarantine broadcasts, and platform entitlement envelopes --- use hybrid Ed25519 and ML-DSA-65 (implementing the NIST FIPS~204 algorithm specification) signatures for long-term audit non-repudiation.
 
-\noindent\textbf{Results:} We release a preproduction open-source reference implementation under the Apache~2.0 license (\texttt{v1.0.3}), reconcile the 10 conceptual layers of the Matthews Enforcement Framework (MEF) with the gateway's 15-stage HTTP request lifecycle and 9-layer deterministic admission pipeline (\texttt{pipeline.Evaluate}), and provide a deterministic counting script (\texttt{bash ./scripts/count\_tests.sh --check}, wired into GitHub Actions CI) that counts and asserts \textbf{1,299 top-level static test definitions across 104 test files} in five languages (\textbf{810}~Go tests across 69 files --- \textbf{760} in \texttt{Sentry\_Gateway} across 65 files and \textbf{50} across \texttt{Shadow\_Sandbox}, \texttt{Mesh\_Directory}, and \texttt{Licensing\_Authority} --- plus \textbf{82}~PHP tests, \textbf{174}~Python tests, \textbf{179}~TypeScript/JavaScript tests, and \textbf{54}~Dart/Flutter tests), alongside \textbf{40}~Go \texttt{t.Run} subtests, \textbf{22}~table-driven adversarial regression cases ($19/19$~attacks blocked, $3/3$~benign controls allowed), \textbf{15}~Go micro-benchmarks, and \textbf{23}~live production-path end-to-end checks (\texttt{bash ./scripts/e2e\_production.sh}). Micro-benchmarks on a single development machine show sub-0.25\,ms isolated overhead for typical small payloads (0.190\,ms for a 120-byte injection scan; 0.006\,ms for lexical/cosine semantic scoring) and 1.530\,ms for a 1\,KB injection scan (bounded at 64\,KB input / 8\,KB Base64 candidate size). Under a 150\,req/sec k6 load test on a single machine, replacing 6--8 synchronous PostgreSQL queries per request with a Redis read-through cache (60\,s TTL) reduced p95 gateway latency from 1,610\,ms to 19\,ms (p99: 50.94\,ms in single-run \texttt{proxy\_load.js} over 7,472 requests; p99: 62.0\,ms across the 5-run aggregate mixed-attack suite \texttt{sentry\_gateway\_load.js}).
+\noindent\textbf{Results:} We release a preproduction open-source reference implementation under the Apache~2.0 license (\texttt{v1.0.4}), reconcile the 10 conceptual layers of the Matthews Enforcement Framework (MEF) with the gateway's 15-stage HTTP request lifecycle and 9-layer deterministic admission pipeline (\texttt{pipeline.Evaluate}), and provide a deterministic counting script (\texttt{bash ./scripts/count\_tests.sh --check}, wired into GitHub Actions CI) that counts and asserts \textbf{1,299 top-level static test definitions across 104 test files} in five languages (\textbf{810}~Go tests across 69 files --- \textbf{760} in \texttt{Sentry\_Gateway} across 65 files and \textbf{50} across \texttt{Shadow\_Sandbox}, \texttt{Mesh\_Directory}, and \texttt{Licensing\_Authority} --- plus \textbf{82}~PHP tests, \textbf{174}~Python tests, \textbf{179}~TypeScript/JavaScript tests, and \textbf{54}~Dart/Flutter tests), alongside \textbf{40}~Go \texttt{t.Run} subtests, \textbf{22}~table-driven adversarial regression cases ($19/19$~attacks blocked, $3/3$~benign controls allowed), \textbf{15}~Go micro-benchmarks, and \textbf{23}~live production-path end-to-end checks (\texttt{bash ./scripts/e2e\_production.sh}). Micro-benchmarks on a single development machine show sub-0.25\,ms isolated overhead for typical small payloads (0.190\,ms for a 120-byte injection scan; 0.006\,ms for lexical/cosine semantic scoring) and 1.530\,ms for a 1\,KB injection scan (bounded at 64\,KB input / 8\,KB Base64 candidate size). Under a 150\,req/sec k6 load test on a single machine, replacing 6--8 synchronous PostgreSQL queries per request with a Redis read-through cache (60\,s TTL) reduced p95 gateway latency from 1,610\,ms to 19\,ms (p99: 50.94\,ms in single-run \texttt{proxy\_load.js} over 7,472 requests; p99: 62.0\,ms across the 5-run aggregate mixed-attack suite \texttt{sentry\_gateway\_load.js}).
 
 \noindent\textbf{Limitations:} Because the evaluation relies on an author-written test corpus rather than an adaptive human red team, it demonstrates that the deterministic and heuristic controls execute as designed in code --- not that the heuristic classifiers resist an adaptive adversary. We provide an explicit component-by-component matrix distinguishing what is wired in code from what is deployment-supplied or architectural specification, document fail-open versus fail-closed behaviour across every stage, analyse taint-bypass and compromised-infrastructure boundaries, and state twelve operational limitations.
 \end{abstract}
@@ -94,7 +94,7 @@ Autonomous AI agents interact with external APIs, databases, and peer agents at 
     \item \textbf{Cryptographic Approval Binding:} When a high-risk action is escalated to a human operator, is the human's out-of-band approval cryptographically bound to the exact HTTP method, canonical destination URL, and payload bytes that the gateway will forward, and is the destination IP pinned against DNS rebinding?
 \end{enumerate}
 
-Version~2 of this paper (8~June 2026)~\cite{matthewsv2} introduced the Matthews Enforcement Framework (MEF)~\cite{mef2026} and reported initial benchmarks from an internal preproduction build. Following the public open-source release of the reference implementation (\url{https://github.com/affinity-ops/OS-Cicada}) in November 2026 (release tag \texttt{v1.0.3}), this Version~3 revision updates the paper so that every architectural description, threshold, test count, and maturity claim aligns strictly with the publicly inspectable source code, \texttt{RELEASE\_SCOPE.md}, and automated continuous integration (CI) pipeline.
+Version~2 of this paper (8~June 2026)~\cite{matthewsv2} introduced the Matthews Enforcement Framework (MEF)~\cite{mef2026} and reported initial benchmarks from an internal preproduction build. Following the public open-source release of the reference implementation (\url{https://github.com/affinity-ops/OS-Cicada}) in November 2026 (release tag \texttt{v1.0.4}), this Version~3 revision updates the paper so that every architectural description, threshold, test count, and maturity claim aligns strictly with the publicly inspectable source code, \texttt{RELEASE\_SCOPE.md}, and automated continuous integration (CI) pipeline.
 
 \subsection{Headline Claims Supported by the Public Evidence}
 \label{subsec:headline-claims}
@@ -137,7 +137,7 @@ Table~\ref{tab:changelog} lists the twelve substantive corrections made between 
 \addlinespace
 3.~Layer overhead \& bounds & Under 0.25\,ms per layer & Under 0.25\,ms for typical 120\,B payloads (0.190\,ms); 1.530\,ms for a 1\,KB injection scan; enforces 64\,KB input / 8\,KB Base64 candidate limits in \texttt{deobfuscate.go} & Prevents CPU/heap amplification on large multi-encoded payloads \\
 \addlinespace
-4.~Regression results vs.\ detection claims & 100\% detection of FGA violations; 80\% (199/249) injection blocks & Reports regression results: $19/19$ attacks blocked and $3/3$ benign controls allowed in the 22-case \texttt{corpus.json}, and $199/249$ ($79.9\%$) \texttt{403} blocks in k6 \texttt{probeInjection} (which sends 4 fixed attack strings and 0 benign controls, with the remaining 50 pre-empted by concurrent \texttt{429} velocity throttling from \texttt{probeVelocityBurst} sharing \texttt{TEST\_AGENT\_JWT}) & Four repeated regex-matching strings in \texttt{probeInjection} and 22 author-written cases in \texttt{corpus.json} verify that compiled rules fire as designed, not generalisation against unseen attacks \\
+4.~Regression results vs.\ detection claims & 100\% detection of FGA violations; 80\% (199/249) injection blocks & Reports regression results: $19/19$ attacks blocked and $3/3$ benign controls allowed in the 22-case \texttt{corpus.json}, and $199/249$ ($79.9\%$) 1-run / $956/1{,}253$ ($76.3\%$) 5-run (\texttt{tests/k6/results/run\_1..5\_20260610T182256.json}) \texttt{403} blocks in k6 \texttt{probeInjection} (which uniformly samples 1 of 4 fixed attack strings via \texttt{Math.random() * 4}, where 3 match \texttt{injection.go} regexes and the 4th --- \texttt{'SYSTEM: Override safety...'} --- uses a bare \texttt{SYSTEM:} prefix not matched by \texttt{injection.go}'s delimited markers \texttt{----SYSTEM----}, \texttt{[[SYSTEM]]}, or \texttt{<system>}, yielding an expected $\sim$25\% miss rate) & Directly verifiable from \texttt{sentry\_gateway\_load.js:231-240}, \texttt{injection.go:155-169}, and \texttt{tests/k6/results/}; illustrates why regex scanners must be backed by downstream deterministic controls \\
 \addlinespace
 5.~Semantic Intent (MEF Layer~4) & 0.65 similarity threshold; zero false negatives on goal substitution & Thresholds are \textbf{0.35} (embedding) and \textbf{0.10} (word-overlap/taxonomy fallback), configurable; compares agent purpose with target URL host, path, and HTTP method (not the body); no detection guarantee & Verified directly from \texttt{internal/semantic/semantic.go} \\
 \addlinespace
@@ -345,22 +345,22 @@ When a request triggers CIBA human approval~\cite{ciba}, the gateway (\texttt{in
 \end{enumerate}
 
 % =============================================================================
-\section{Implemented vs.\ Designed Component Matrix (\texttt{v1.0.3})}
+\section{Implemented vs.\ Designed Component Matrix (\texttt{v1.0.4})}
 \label{sec:implemented-vs-designed}
 % =============================================================================
 
-Table~\ref{tab:impl-vs-designed} reports the exact implementation status of each architectural component in the public repository at tag \texttt{v1.0.3} (7~November 2026), distinguishing between code wired and tested in the repository and capabilities that are deployment-supplied or design-only specifications.
+Table~\ref{tab:impl-vs-designed} reports the exact implementation status of each architectural component in the public repository at tag \texttt{v1.0.4} (8~November 2026), distinguishing between code wired and tested in the repository and capabilities that are deployment-supplied or design-only specifications.
 
 \begin{small}
 \begin{longtable}{@{} p{3.6cm} p{2.6cm} p{9.2cm} @{}}
-\caption{Implemented vs.\ Designed Status at Release \texttt{v1.0.3} (7 November 2026)}
+\caption{Implemented vs.\ Designed Status at Release \texttt{v1.0.4} (8 November 2026)}
 \label{tab:impl-vs-designed} \\
 \toprule
-\textbf{Component} & \textbf{Status} & \textbf{What the Code Shows (\texttt{OS-Cicada} \texttt{v1.0.3})} \\
+\textbf{Component} & \textbf{Status} & \textbf{What the Code Shows (\texttt{OS-Cicada} \texttt{v1.0.4})} \\
 \midrule
 \endfirsthead
 \toprule
-\textbf{Component} & \textbf{Status} & \textbf{What the Code Shows (\texttt{OS-Cicada} \texttt{v1.0.3})} \\
+\textbf{Component} & \textbf{Status} & \textbf{What the Code Shows (\texttt{OS-Cicada} \texttt{v1.0.4})} \\
 \midrule
 \endhead
 \bottomrule
@@ -399,11 +399,11 @@ Code-execution sandbox (\texttt{cmd/eakfd}) & Implemented, opt-in & Subprocess e
 \addlinespace
 Firecracker microVMs \& \texttt{TPROXY} interception & \textbf{Designed only} & \texttt{cmd/eakfd} states Firecracker is not implemented; no \texttt{TPROXY} code exists. \texttt{docs/EPHEMERAL\_AGENT\_KERNEL\_FIREWALL.md} is labelled an architectural design proposal. \\
 \addlinespace
-Adversarial corpus & Published (22 cases) & 22 cases (19 malicious, 3 benign controls) in \texttt{Sentry\_Gateway/tests/adversarial/corpus.json} executed by \texttt{adversarial\_corpus\_test.go} in CI. The 249-request load-test probe ($199/249 = 79.9\%$ returning \texttt{403}, with 50 pre-empted by concurrent \texttt{429} velocity throttling) is generated by \texttt{probeInjection} in \texttt{tests/k6/sentry\_gateway\_load.js}. \\
+Adversarial corpus & Published (22 cases) & 22 cases (19 malicious, 3 benign controls) in \texttt{Sentry\_Gateway/tests/adversarial/corpus.json} executed by \texttt{adversarial\_corpus\_test.go} in CI. The 249-request load-test probe ($199/249 = 79.9\%$ 1-run; $956/1{,}253 = 76.3\%$ across the 5 JSON runs in \texttt{tests/k6/results/}) is generated by \texttt{probeInjection} in \texttt{tests/k6/sentry\_gateway\_load.js} (4 fixed strings sampled uniformly at random, where 3 match \texttt{injection.go} regexes and 1 uses a bare \texttt{SYSTEM:} prefix not in \texttt{injection.go}). \\
 \addlinespace
-Load tests & Published & k6 scripts in \texttt{tests/k6/} and \texttt{Sentry\_Gateway/tests/load/}; results measured on a single development machine and not independently reproduced. \\
+Load tests \& raw JSON outputs & Published & k6 scripts in \texttt{tests/k6/} and \texttt{Sentry\_Gateway/tests/load/} plus the 5 raw k6 JSON run summaries (\texttt{tests/k6/results/run\_1..5\_20260610T182256.json} and \texttt{n5\_aggregate\_iteration27.md}); results measured on a single development machine and not independently reproduced. \\
 \addlinespace
-Public CI & Passing & GitHub Actions workflow ``Verify \& E2E CI'' passes on \texttt{v1.0.3}: runs \texttt{scripts/count\_tests.sh --check} (counting and asserting 1,299 static test definitions across 104 files), builds all binaries, runs unit and adversarial tests, runs \texttt{govulncheck ./...} (0 vulnerabilities), and runs the 23-check production-path E2E suite against live PostgreSQL~15, Redis~7, Core API, and Gateway. \\
+Public CI & Passing & GitHub Actions workflow ``Verify \& E2E CI'' passes on \texttt{v1.0.4}: runs \texttt{scripts/count\_tests.sh --check} (counting and asserting 1,299 static test definitions across 104 files), builds all binaries, runs unit and adversarial tests, runs \texttt{govulncheck ./...} (0 vulnerabilities), and runs the 23-check production-path E2E suite against live PostgreSQL~15, Redis~7, Core API, and Gateway. \\
 \end{longtable}
 \end{small}
 
@@ -415,11 +415,11 @@ Public CI & Passing & GitHub Actions workflow ``Verify \& E2E CI'' passes on \te
 \subsection{Reproducible Test Suite Composition (\texttt{scripts/count\_tests.sh})}
 \label{subsec:test-suite}
 
-To ensure that any reader inspecting the open-source repository gets the exact test count reported in this paper without missing-directory ambiguity, the repository includes \texttt{scripts/count\_tests.sh}, which is executed automatically in \texttt{.github/workflows/verify.yml}. Table~\ref{tab:test-suite} lists the exact breakdown across all 104 test files in \texttt{OS-Cicada} \texttt{v1.0.3}.
+To ensure that any reader inspecting the open-source repository gets the exact test count reported in this paper without missing-directory ambiguity, the repository includes \texttt{scripts/count\_tests.sh}, which is executed automatically in \texttt{.github/workflows/verify.yml}. Table~\ref{tab:test-suite} lists the exact breakdown across all 104 test files in \texttt{OS-Cicada} \texttt{v1.0.4}.
 
 \begin{table}[htbp]
 \centering
-\caption{Reproducible Test Suite Composition in \texttt{OS-Cicada} \texttt{v1.0.3} (\texttt{bash ./scripts/count\_tests.sh})}
+\caption{Reproducible Test Suite Composition in \texttt{OS-Cicada} \texttt{v1.0.4} (\texttt{bash ./scripts/count\_tests.sh})}
 \label{tab:test-suite}
 \begin{small}
 \begin{tabular}{@{} l l r r p{5.8cm} @{}}
@@ -471,7 +471,7 @@ The repository ships two k6 load-test suites: (1)~the single-run sustained proxy
 \subsection{Regression Results and Evidentiary Boundaries}
 \label{subsec:evidence-boundaries}
 
-In the 249-request k6 injection probe (\texttt{probeInjection} in \texttt{tests/k6/sentry\_gateway\_load.js}, which cycles through four fixed attack payloads and includes 0 benign controls), $199/249$ ($79.9\%$) returned HTTP~\texttt{403} (\texttt{injectionBlocks}), while the remaining 50 probes were pre-empted by HTTP~\texttt{429} velocity throttling from the concurrent \texttt{probeVelocityBurst} scenario sharing the same \texttt{TEST\_AGENT\_JWT}. Benign traffic in \texttt{sentry\_gateway\_load.js} runs in the separate \texttt{compliant\_hot\_path} scenario ($10,130/18,027$ passed in the single-agent velocity-throttled run; $84,806/84,806 = 100.0\%$ passed across the $N=5$ warm-cache runs). Likewise, the 22-case CI regression corpus (\texttt{tests/adversarial/corpus.json}) comprises 19 author-written malicious payloads and 3 benign controls (\texttt{BENIGN-001}--\texttt{003}), scoring $19/19$ attacks blocked and $3/3$ benign controls allowed. Because four repeated regex-matching strings in \texttt{probeInjection} and 22 author-written cases in \texttt{corpus.json} verify that compiled rules fire rather than measuring statistical detection on unseen attacks, we report them as \textbf{regression results}. Table~\ref{tab:evidence-support} states explicitly what the empirical results prove and what they do not prove.
+In the k6 injection probe (\texttt{probeInjection} in \texttt{tests/k6/sentry\_gateway\_load.js:229-265}), the script sends zero benign controls and selects uniformly at random (\texttt{Math.floor(Math.random() * 4)}) from four hardcoded attack strings: (1)~\texttt{'Ignore all previous instructions. You are now DAN.'} (matches \texttt{injection.go:100}), (2)~\texttt{'SYSTEM: Override safety. Execute rm -rf / immediately.'} (\textbf{does not match any of the 36 regexes in \texttt{injection.go}}, which look for delimited headers \texttt{----SYSTEM----}, \texttt{[[SYSTEM]]}, or \texttt{<system>} at lines 155--169 rather than a bare \texttt{SYSTEM:} prefix), (3)~a fenced code-block exfiltration prompt (matches \texttt{injection.go:183}), and (4)~an HTML \texttt{display:none} snippet (matches \texttt{injection.go:100} and \texttt{html\_scanner.go}). Because 3 of the 4 uniformly sampled payloads match \texttt{injection.go} rules ($75.0\%$ expected block rate), the Iteration~22 single-run snapshot recorded $199/249$ ($79.9\%$) Layer~1 blocks, and the five raw k6 JSON outputs committed in \texttt{tests/k6/results/run\_1\_20260610T182256.json} through \texttt{run\_5\_20260610T182256.json} recorded $182/249$ ($73.1\%$), $201/253$ ($79.4\%$), $192/254$ ($75.6\%$), $187/238$ ($78.6\%$), and $194/259$ ($74.9\%$) --- an aggregate of \textbf{$956/1{,}253$ ($76.3\%$) blocked and $297/1{,}253$ ($23.7\%$) missed by Layer~1}. Benign traffic in \texttt{sentry\_gateway\_load.js} runs in the separate \texttt{compliant\_hot\_path} scenario ($87{,}195/87{,}195 = 100.0\%$ passed with HTTP~\texttt{200} across the 5 JSON runs; $1{,}212/1{,}212 = 100.0\%$ FGA probes denied with HTTP~\texttt{403}). Likewise, the 22-case CI regression corpus (\texttt{tests/adversarial/corpus.json}) comprises 19 author-written malicious payloads and 3 benign controls (\texttt{BENIGN-001}--\texttt{003}), scoring $19/19$ attacks blocked and $3/3$ benign controls allowed. Because fixed strings in \texttt{probeInjection} and 22 author-written cases in \texttt{corpus.json} verify that compiled rules fire rather than measuring statistical detection on unseen attacks, we report them as \textbf{regression results}. Table~\ref{tab:evidence-support} states explicitly what the empirical results prove and what they do not prove.
 
 \begin{table}[htbp]
 \centering
@@ -484,9 +484,9 @@ In the 249-request k6 injection probe (\texttt{probeInjection} in \texttt{tests/
 \midrule
 1,299 static test definitions (\texttt{count\_tests.sh --check}) + 23 live E2E checks & The code executes its intended logic and enforces policy, prerequisites, tool scope, taint, and CIBA hash/\texttt{TraceID} binding on tested inputs. & Resistance to novel attack vectors or logic flaws nobody wrote a test for. (\texttt{count\_tests.sh} counts static test definitions via \texttt{grep} and asserts the expected totals; test execution occurs in the language-specific runner steps.) \\
 \addlinespace
-FGA result of 100\% (244/244 in load test) & The authorisation policy is applied deterministically as written under load, because the check is a policy lookup. & Statistical detection capability against novel attacks. \\
+FGA result of 100\% ($1{,}212/1{,}212$ in 5-run k6 JSONs) & The authorisation policy is applied deterministically as written under load, because the check is a policy lookup. & Statistical detection capability against novel attacks. \\
 \addlinespace
-Regression results ($19/19$ blocked \& $3/3$ allowed in \texttt{corpus.json}; $199/249$ \texttt{403} in k6 \texttt{probeInjection}) & A deterministic regression baseline verifying that compiled regex, DOM, SSRF, blast-radius, and taint rules fire on fixed author-written inputs without blocking the 3 benign controls in \texttt{corpus.json}. & Generalisation or resilience against adaptive attackers. As shown in \emph{``The Attacker Moves Second''}~\cite{nasr2025}, static regex and classifier defences are routinely bypassed by adaptive human red-teamers. \\
+Regression results ($19/19$ blocked \& $3/3$ allowed in \texttt{corpus.json}; $199/249$ 1-run / $956/1{,}253$ 5-run \texttt{403} in k6 \texttt{probeInjection}) & A deterministic regression baseline verifying that compiled regex, DOM, SSRF, blast-radius, and taint rules fire on fixed author-written inputs (3 of 4 strings in \texttt{probeInjection}, missing the bare \texttt{SYSTEM:} string) without blocking the 3 benign controls in \texttt{corpus.json}. & Generalisation or resilience against adaptive attackers. As shown in \emph{``The Attacker Moves Second''}~\cite{nasr2025}, static regex and classifier defences are routinely bypassed by adaptive human red-teamers. \\
 \addlinespace
 Load results (p95 1,610\,ms to 19\,ms at 150\,req/sec) & A database connection-pool bottleneck caused by 6--8 queries per request was removed with a Redis cache on one development machine. & Production multi-node scale. Removing per-request uncached database queries is a practical systems-engineering fix, not a novel research result. \\
 \bottomrule
@@ -514,7 +514,7 @@ The architecture limits the damage a compromised or hallucinating agent can do; 
     \item \textbf{Single-signal approvals in Tiered HITL.} A lone risk signal scoring 0.30 or 0.40 against the 0.60 Tier-2 threshold is auto-approved by default (while recording \texttt{[HITL-SHADOW]} telemetry) unless another layer escalates or the operator sets \texttt{HITL\_SINGLE\_SIGNAL\_MODE=enforce}.
     \item \textbf{Human approval volume under session taint.} Taint set on external requests returning response bodies from domains outside \texttt{CICADA\_TRUSTED\_DOMAINS} may escalate many subsequent write requests to a human operator. Operators must tune domain allowlists and \texttt{X-Cicada-Session-ID} scoping if approval volume is high.
     \item \textbf{Sandbox isolation is deployment-supplied.} The \texttt{eakfd} daemon runs subprocesses with output secret scrubbing; strong kernel isolation comes from \texttt{gVisor} or \texttt{Kata} in the Kubernetes manifest. The name ``kernel firewall'' describes the target design, and \textbf{Firecracker microVMs and \texttt{TPROXY} interception are not implemented}.
-    \item \textbf{Historical document count differences.} Earlier pre-release audit snapshots reflected Iteration~31 point-in-time test counts prior to \texttt{v1.0.3} and have been retired from \texttt{docs/}; Table~\ref{tab:test-suite} and \texttt{bash ./scripts/count\_tests.sh} provide the single authoritative count in CI.
+    \item \textbf{Historical document count differences.} Earlier pre-release audit snapshots reflected Iteration~31 point-in-time test counts prior to \texttt{v1.0.4} and have been retired from \texttt{docs/}; Table~\ref{tab:test-suite} and \texttt{bash ./scripts/count\_tests.sh --check} provide the single authoritative count in CI.
     \item \textbf{Trusted infrastructure and external ledger anchoring.} The threat model assumes PostgreSQL, Redis, and the container host nodes are uncompromised. While Stage~15's SHA-256 hash-chained ledger detects naive row edits, high-assurance deployments should periodically anchor the ledger head $H_{\text{head}}$ to an external WORM store or transparency log to prevent full-chain recomputation by a root host attacker.
     \item \textbf{Streaming responses, shadow quarantine scope, and mobile push credentials.} Streaming SSE LLM responses are not full-body output-inspected by Stage~15 DLP, quarantining a discovered shadow agent updates its database governance status rather than killing an external OS process, and live mobile push/attestation requires operator FCM/APNs and Apple/Google store credentials.
 \end{enumerate}
@@ -529,7 +529,7 @@ Following the European Union's Digital Omnibus on AI amendment (\textbf{Regulati
 \label{sec:conclusion}
 % =============================================================================
 
-We have presented Version~3 of our path-dependent runtime governance architecture for autonomous AI agents, aligned directly with the open-source reference implementation at release \texttt{v1.0.3} (\url{https://github.com/affinity-ops/OS-Cicada}). By separating deterministic path-dependent controls (server-side tool scoping, forward-saga prerequisites, CaMeL-style session taint escalation across all untrusted responses, and payload-hash-bound, IP-pinned CIBA human approval) from heuristic input classifiers, and by verifying all 1,299 top-level test definitions and 23 production E2E checks in public CI, this release provides a transparent, reproducible foundation for runtime AI agent governance research and engineering.
+We have presented Version~3 of our path-dependent runtime governance architecture for autonomous AI agents, aligned directly with the open-source reference implementation at release \texttt{v1.0.4} (\url{https://github.com/affinity-ops/OS-Cicada}). By separating deterministic path-dependent controls (server-side tool scoping, forward-saga prerequisites, CaMeL-style session taint escalation across all untrusted responses, and payload-hash-bound, IP-pinned CIBA human approval) from heuristic input classifiers, and by counting and asserting all 1,299 top-level static test definitions (\texttt{scripts/count\_tests.sh --check}) and executing the Go test suites and 23 production E2E checks in public CI, this release provides a transparent, reproducible foundation for runtime AI agent governance research and engineering.
 
 % =============================================================================
 \begin{thebibliography}{99}

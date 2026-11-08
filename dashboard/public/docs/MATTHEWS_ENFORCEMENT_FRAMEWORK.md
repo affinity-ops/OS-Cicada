@@ -2,11 +2,11 @@
 
 **Author:** Patrick Matthews (Affinity Ops / Affinity Smart AI — `info@affinitysmartai.co.uk`)  
 **Originally Published:** 4 June 2026 (Conceptual 10-Layer Specification)  
-**Updated for Open-Source Release (`v1.0.3`):** 7 November 2026
+**Updated for Open-Source Release (`v1.0.4`):** 8 November 2026
 
 > [!IMPORTANT]
 > **Relationship to the Version 3 Architecture Paper & `RELEASE_SCOPE.md`:**
-> This document preserves the foundational **10-Layer Conceptual Specification** of the Matthews Enforcement Framework (MEF) originally formulated in June 2026. For the complete, code-verified open-source reference implementation (`v1.0.3`), see **[`docs/PATH_DEPENDENT_ARCHITECTURE_v3.md`](./PATH_DEPENDENT_ARCHITECTURE_v3.md)** and **[`RELEASE_SCOPE.md`](../RELEASE_SCOPE.md)**, which map these 10 conceptual layers 1-for-1 onto the **15-Stage Gateway Request Lifecycle** (`cmd/sentry/main.go`) and the **9-Layer Deterministic Admission Pipeline** (`internal/pipeline/pipeline.go`).
+> This document preserves the foundational **10-Layer Conceptual Specification** of the Matthews Enforcement Framework (MEF) originally formulated in June 2026. For the complete, code-verified open-source reference implementation (`v1.0.4`), see **[`docs/PATH_DEPENDENT_ARCHITECTURE_v3.md`](./PATH_DEPENDENT_ARCHITECTURE_v3.md)** and **[`RELEASE_SCOPE.md`](../RELEASE_SCOPE.md)**, which map these 10 conceptual layers 1-for-1 onto the **15-Stage Gateway Request Lifecycle** (`cmd/sentry/main.go`) and the **9-Layer Deterministic Admission Pipeline** (`internal/pipeline/pipeline.go`).
 
 ---
 

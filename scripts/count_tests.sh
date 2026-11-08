@@ -70,5 +70,5 @@ if [[ "${1:-}" == "--check" ]]; then
   if [[ "$FAIL" -ne 0 ]]; then
     exit 1
   fi
-  echo "✓ All static test definition counts match expected v1.0.3 figures (1,299 across 104 files)."
+  echo "✓ All static test definition counts match expected v1.0.4 figures (1,299 across 104 files)."
 fi

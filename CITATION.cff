@@ -11,8 +11,8 @@ authors:
 repository-code: "https://github.com/affinity-ops/OS-Cicada"
 url: "https://github.com/affinity-ops/OS-Cicada"
 license: Apache-2.0
-version: "1.0.3"
-date-released: "2026-11-07"
+version: "1.0.4"
+date-released: "2026-11-08"
 keywords:
   - ai-agents
   - zero-trust

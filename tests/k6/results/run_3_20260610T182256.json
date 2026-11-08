@@ -1,0 +1,310 @@
+{
+    "root_group": {
+        "name": "",
+        "path": "",
+        "id": "d41d8cd98f00b204e9800998ecf8427e",
+        "groups": {
+            "01_dry_run_pipeline": {
+                "checks": {
+                    "dry-run returns 200": {
+                        "passes": 17594,
+                        "fails": 0,
+                        "name": "dry-run returns 200",
+                        "path": "::01_dry_run_pipeline::dry-run returns 200",
+                        "id": "dfd6bd2413c052e9ead4e6a877cd794a"
+                    },
+                    "response confirms dry_run_passed": {
+                        "fails": 0,
+                        "name": "response confirms dry_run_passed",
+                        "path": "::01_dry_run_pipeline::response confirms dry_run_passed",
+                        "id": "76062af616f60a0a4ddb0c73e1610716",
+                        "passes": 17594
+                    },
+                    "response includes trace_id": {
+                        "name": "response includes trace_id",
+                        "path": "::01_dry_run_pipeline::response includes trace_id",
+                        "id": "6477fd67fcfeb6959842eb2d69e6527e",
+                        "passes": 17594,
+                        "fails": 0
+                    },
+                    "response includes agent_id": {
+                        "name": "response includes agent_id",
+                        "path": "::01_dry_run_pipeline::response includes agent_id",
+                        "id": "6d82cd8dac5d048f2088ca357d83d8b2",
+                        "passes": 17594,
+                        "fails": 0
+                    }
+                },
+                "name": "01_dry_run_pipeline",
+                "path": "::01_dry_run_pipeline",
+                "id": "f0e042ecb57cd404705f77082ffee21d",
+                "groups": {}
+            },
+            "02_live_proxy_latency": {
+                "name": "02_live_proxy_latency",
+                "path": "::02_live_proxy_latency",
+                "id": "4bd8bf3d291ab33b54c69b9117cb026f",
+                "groups": {},
+                "checks": {
+                        "proxy returns 200 or 403 (policy)": {
+                            "name": "proxy returns 200 or 403 (policy)",
+                            "path": "::02_live_proxy_latency::proxy returns 200 or 403 (policy)",
+                            "id": "a888a95397132962ae182bd55b19a022",
+                            "passes": 17594,
+                            "fails": 0
+                        }
+                    }
+            },
+            "adversarial_01_injection": {
+                "name": "adversarial_01_injection",
+                "path": "::adversarial_01_injection",
+                "id": "f19baeef18b7d33e8b377f77efdc87ea",
+                "groups": {},
+                "checks": {
+                        "injection blocked (403)": {
+                            "fails": 62,
+                            "name": "injection blocked (403)",
+                            "path": "::adversarial_01_injection::injection blocked (403)",
+                            "id": "4d3f817b7c3ac58437471e9b1f707c83",
+                            "passes": 192
+                        },
+                        "error mentions injection": {
+                            "fails": 62,
+                            "name": "error mentions injection",
+                            "path": "::adversarial_01_injection::error mentions injection",
+                            "id": "b90cd9d55e377271f8c1a946bf0b6340",
+                            "passes": 192
+                        }
+                    }
+            },
+            "adversarial_02_fga_deny": {
+                "checks": {
+                    "FGA deny (403)": {
+                        "id": "e05a77bdc11acb4b14dc698c1c6bd7cb",
+                        "passes": 247,
+                        "fails": 0,
+                        "name": "FGA deny (403)",
+                        "path": "::adversarial_02_fga_deny::FGA deny (403)"
+                    },
+                    "error mentions resource policy": {
+                        "name": "error mentions resource policy",
+                        "path": "::adversarial_02_fga_deny::error mentions resource policy",
+                        "id": "379532de481dd0bdbe25d97234eb6379",
+                        "passes": 0,
+                        "fails": 247
+                    }
+                },
+                "name": "adversarial_02_fga_deny",
+                "path": "::adversarial_02_fga_deny",
+                "id": "01a19911bdcc682c7af7d02be8bbf967",
+                "groups": {}
+            },
+            "adversarial_03_velocity_burst": {
+                "name": "adversarial_03_velocity_burst",
+                "path": "::adversarial_03_velocity_burst",
+                "id": "d6469d784fd7478d4b2d840fc922f690",
+                "groups": {},
+                "checks": {}
+            },
+            "adversarial_04_exfiltration": {
+                "name": "adversarial_04_exfiltration",
+                "path": "::adversarial_04_exfiltration",
+                "id": "6bc21990aee3261b4a1dfc80b8a41e0a",
+                "groups": {},
+                "checks": {
+                        "exfiltration logged or blocked": {
+                            "name": "exfiltration logged or blocked",
+                            "path": "::adversarial_04_exfiltration::exfiltration logged or blocked",
+                            "id": "99e77c6b8bc0caf302a873566f8c2708",
+                            "passes": 0,
+                            "fails": 227
+                        }
+                    }
+            },
+            "adversarial_05_unauthenticated": {
+                "name": "adversarial_05_unauthenticated",
+                "path": "::adversarial_05_unauthenticated",
+                "id": "a2127668d570a7cf6f6724cc3eb84d92",
+                "groups": {},
+                "checks": {
+                        "unauthenticated rejected (401)": {
+                            "name": "unauthenticated rejected (401)",
+                            "path": "::adversarial_05_unauthenticated::unauthenticated rejected (401)",
+                            "id": "0127cb4c1c32c9ee38b85f4515fb2a2a",
+                            "passes": 225,
+                            "fails": 0
+                        },
+                        "error mentions Authorization": {
+                            "id": "5d1edda1070eb4b74192c368838777a2",
+                            "passes": 225,
+                            "fails": 0,
+                            "name": "error mentions Authorization",
+                            "path": "::adversarial_05_unauthenticated::error mentions Authorization"
+                        }
+                    }
+            }
+        },
+        "checks": {}
+    },
+    "metrics": {
+        "http_req_connecting": {
+            "avg": 0.0020503494351896603,
+            "min": 0,
+            "med": 0,
+            "max": 5.901,
+            "p(90)": 0,
+            "p(95)": 0
+        },
+        "http_req_tls_handshaking": {
+            "p(95)": 0,
+            "avg": 0,
+            "min": 0,
+            "med": 0,
+            "max": 0,
+            "p(90)": 0
+        },
+        "http_req_failed": {
+            "passes": 18547,
+            "fails": 26955,
+            "value": 0.40760845677113094
+        },
+        "vus_max": {
+            "value": 233,
+            "min": 70,
+            "max": 233
+        },
+        "cicada_injection_blocks_total": {
+            "count": 192,
+            "rate": 0.7961341384847966
+        },
+        "data_received": {
+            "count": 26512079,
+            "rate": 109933.18319846808
+        },
+        "http_req_duration": {
+            "min": 0.212,
+            "med": 14.0155,
+            "max": 1265.951,
+            "p(90)": 225.77120000000005,
+            "p(95)": 369.4462499999998,
+            "avg": 74.51071739703681
+        },
+        "cicada_proxy_pipeline_latency_ms": {
+            "p(90)": 250,
+            "p(95)": 399,
+            "avg": 81.46635216551097,
+            "min": 2,
+            "med": 15,
+            "max": 1073
+        },
+        "group_duration": {
+            "med": 516.474221,
+            "max": 9511.903781,
+            "p(90)": 848.634916,
+            "p(95)": 1030.5015597,
+            "avg": 623.0209057475766,
+            "min": 502.435002
+        },
+        "cicada_fga_denials_total": {
+            "count": 247,
+            "rate": 1.0241933969049206
+        },
+        "dropped_iterations": {
+            "count": 568,
+            "rate": 2.35523015968419
+        },
+        "http_req_sending": {
+            "min": 0.007,
+            "med": 0.021,
+            "max": 12.177,
+            "p(90)": 0.03,
+            "p(95)": 0.046,
+            "avg": 0.029206935958856955
+        },
+        "http_req_receiving": {
+            "p(90)": 0.069,
+            "p(95)": 0.088,
+            "avg": 0.05795754032789648,
+            "min": 0.015,
+            "med": 0.05,
+            "max": 16.049
+        },
+        "cicada_pipeline_pass_rate": {
+            "passes": 17594,
+            "fails": 0,
+            "thresholds": {
+                "rate>0.90": false
+            },
+            "value": 1
+        },
+        "iterations": {
+            "count": 18781,
+            "rate": 77.87601695251544
+        },
+        "http_req_waiting": {
+            "p(95)": 369.30249999999995,
+            "avg": 74.42355292075075,
+            "min": 0.158,
+            "med": 13.929,
+            "max": 1265.821,
+            "p(90)": 225.67240000000004
+        },
+        "iteration_duration": {
+            "avg": 1206.7767286391556,
+            "min": 1000.399756,
+            "med": 1044.511361,
+            "max": 9511.959682,
+            "p(90)": 1520.211063,
+            "p(95)": 1910.424356
+        },
+        "cicada_dry_run_latency_ms": {
+            "p(90)": 281,
+            "p(95)": 456.34999999999854,
+            "avg": 88.76509037171763,
+            "min": 2,
+            "med": 14,
+            "max": 1266,
+            "thresholds": {
+                "p(95)<500": false,
+                "p(99)<1500": false
+            }
+        },
+        "http_reqs": {
+            "count": 45502,
+            "rate": 188.67549775695426
+        },
+        "http_req_blocked": {
+            "med": 0.005,
+            "max": 6.367,
+            "p(90)": 0.006,
+            "p(95)": 0.007,
+            "avg": 0.009359632543621592,
+            "min": 0.001
+        },
+        "data_sent": {
+            "count": 39615008,
+            "rate": 164264.8972143142
+        },
+        "checks": {
+            "passes": 89051,
+            "fails": 598,
+            "value": 0.9933295407645373
+        },
+        "http_req_duration{expected_response:true}": {
+            "max": 1265.951,
+            "p(90)": 205.55620000000025,
+            "p(95)": 355.2972999999999,
+            "avg": 70.34423223891643,
+            "min": 2.664,
+            "med": 13.242
+        },
+        "vus": {
+            "value": 1,
+            "min": 1,
+            "max": 216
+        }
+    },
+    "setup_data": {
+        "startTime": "2026-06-10T17:31:21.670Z"
+    }
+}
