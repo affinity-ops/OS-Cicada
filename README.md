@@ -251,7 +251,7 @@ The architectural specifications, formal mathematical model, implemented-versus-
 
 > **Matthews, P. (2026).** *A Path-Dependent, Multi-Layered Architecture for Runtime Governance and Post-Quantum Cryptographic Assurance of Autonomous AI Agents (Version 3).*
 > - **Version 3 Paper (Markdown & LaTeX):** [`docs/PATH_DEPENDENT_ARCHITECTURE_v3.md`](./docs/PATH_DEPENDENT_ARCHITECTURE_v3.md) / [`docs/PATH_DEPENDENT_ARCHITECTURE_v3.tex`](./docs/PATH_DEPENDENT_ARCHITECTURE_v3.tex)
-> - **Zenodo Concept DOI (Cite All Versions):** [`10.5281/zenodo.20592732`](https://doi.org/10.5281/zenodo.20592732) (Version 3 DOI: [`10.5281/zenodo.24053477`](https://doi.org/10.5281/zenodo.24053477))
+> - **Zenodo (all versions, latest):** [`10.5281/zenodo.20592732`](https://doi.org/10.5281/zenodo.20592732)
 > - **SSRN Preprint DOI (June 2026):** [`10.2139/ssrn.6898119`](https://doi.org/10.2139/ssrn.6898119) (`https://papers.ssrn.com/sol3/papers.cfm?abstract_id=6898119`)
 > - **Original MEF Specification (June 2026):** [`docs/MATTHEWS_ENFORCEMENT_FRAMEWORK.md`](./docs/MATTHEWS_ENFORCEMENT_FRAMEWORK.md)
 > - **Licences:** Paper licensed under **Creative Commons Attribution 4.0 International (`CC BY 4.0`)**; software repository licensed under **Apache License 2.0 (`Apache-2.0`)**.

@@ -14,10 +14,7 @@ doi: "10.5281/zenodo.20592732"
 identifiers:
   - type: doi
     value: "10.5281/zenodo.20592732"
-    description: "Zenodo Concept DOI (cite all versions)"
-  - type: doi
-    value: "10.5281/zenodo.24053477"
-    description: "Zenodo Version 3 DOI"
+    description: "Zenodo Concept DOI (all versions, latest)"
   - type: doi
     value: "10.2139/ssrn.6898119"
     description: "SSRN Preprint DOI (June 2026 Version 2)"
