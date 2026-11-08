@@ -1,14 +1,27 @@
-# Cicada Platform — Security Audit Test Results
+# Cicada Platform — Security Audit Test Results (Historical Iteration Log & Reproducible Suite Reference)
 
-> **Date:** 2026-06-20 (Iteration 31 — EAKF Plugin: eakfd Daemon, Deterministic State Sieve, Gateway Integration, Code Execution Sandboxing)  
+> [!IMPORTANT]
+> **Authoritative Current-Release (`v1.0.3`) Test Counts & Reproducibility:**
+> This file preserves the chronological engineering and security-hardening log across Iterations 1–31. For the **current open-source repository (`v1.0.3`)**, run `bash ./scripts/count_tests.sh` at the repository root (also executed automatically in `.github/workflows/verify.yml`) to verify the exact, zero-ambiguity source counts across all **104 test files**:
+> - **Go (`Sentry_Gateway`):** `760` top-level `func Test*` tests (`65` files, plus `40` `t.Run` subtests, `22` adversarial corpus cases in `internal/pipeline/testdata/corpus.json`, and `15` `func Benchmark*` benchmarks)
+> - **Go (`Shadow_Sandbox`, `Mesh_Directory`, `Licensing_Authority`):** `50` top-level `func Test*` tests (`4` files) -> **`810` total Go top-level tests (`69` files)**
+> - **PHP (`Core_API/tests`):** `82` test methods (`9` files)
+> - **Python (`Cicada_SDK/python/tests`, `Verification_Swarm`, `Saga_Executor`):** `174` test functions (`8` files: `107` in `Cicada_SDK/python`, `39` in `Verification_Swarm`, `28` in `Saga_Executor`)
+> - **TypeScript / JavaScript (`Developer_Portal/src`, `dashboard/src`, `Cicada_SDK/node/src`):** `179` `it`/`test` blocks (`14` files: `63` in `Developer_Portal`, `86` in `dashboard`, `30` in `Cicada_SDK/node`)
+> - **Dart / Flutter (`Ciba_Flutter_App/test`):** `54` `test`/`testWidgets` blocks (`4` files: `42` `test(` + `12` `testWidgets(`)
+> - **Total Top-Level Test Definitions (`bash ./scripts/count_tests.sh`):** **`1,299` across `104` test files**
+> - **Live Production-Path E2E (`bash ./scripts/e2e_production.sh`):** **`23 / 23` checks** against live PostgreSQL 15, Redis 7, `Core_API`, and `Sentry_Gateway` (`13` core checks + `10` `GATEWAY_SECRET`-gated admin and canary issue/revoke checks).
+> - See [`RELEASE_SCOPE.md`](../RELEASE_SCOPE.md) and [`docs/PATH_DEPENDENT_ARCHITECTURE_v3.md`](./PATH_DEPENDENT_ARCHITECTURE_v3.md) for the current Implemented-vs.-Designed engineering matrix and 15-Stage Gateway Lifecycle.
+
+> **Historical Snapshot Header (Iteration 31 — 2026-06-20):** EAKF Plugin: `eakfd` Daemon, Deterministic State Sieve, Gateway Integration, Code Execution Sandboxing  
 > **Previous:** 2026-06-16 (Iteration 30 — P2P Sovereign Mesh: Tenant Isolation, PQC Hybrid Auth, Threat Intel, Mesh Directory, Production Scaffolding)  
 > **Executed by:** Automated CI pipeline (local) + Go unit/integration tests across 3 services  
-> **Total Tests:** 701 Go unit/integration + 82 PHP unit/integration + 164 Python + 53 Node.js + 147 Vitest + 22 Playwright E2E + 12 benchmarks + 16 live E2E + 29 live integration + **18 new EAKF security tests**  
+> **Historical Iteration 31 Snapshot Count (pre-v1.0.3 consolidation):** 701 Go unit/integration + 82 PHP unit/integration + 164 Python + 53 Node.js + 147 Vitest + 22 Playwright E2E + 12 benchmarks + 16 live E2E + 29 live integration + **18 new EAKF security tests** (1,244 point-in-time snapshot; superseded by the 1,299 verified count above)  
 > **Pass Rate:** 100% — zero failures, zero caveats  
 > **New in Iteration 31:** Ephemeral Agent Kernel Firewall (EAKF) plugin. `eakfd` daemon binary (gRPC server on UDS). Deterministic State Sieve (11 credential patterns, 4 IP ranges, tfstate redaction). Plugin Manager (boot-time registration, 30s health probes). Gateway wiring (step 8.5, fail-closed 503, `/health` plugins). `make build-eakfd`.  
 > **Build Verification:** `go build ./cmd/sentry/` — exit code 0 | `go build ./cmd/eakfd/` — exit code 0 | `make build-eakfd` — exit code 0  
 > **Schema Parity:** `verify-schema-parity.sh --ci` — ✔ PASS across 41 tables  
-> **Git Branch:** `app`
+> **Git Branch:** `main`
 
 
 

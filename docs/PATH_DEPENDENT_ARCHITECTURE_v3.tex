@@ -1,0 +1,628 @@
+% © 2026 Patrick Matthews (Affinity Ops / Affinity Smart AI)
+% SPDX-License-Identifier: Apache-2.0
+
+\documentclass[11pt, a4paper]{article}
+
+% --- Packages ---
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage[margin=2.3cm]{geometry}
+\usepackage{amsmath, amssymb}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{array}
+\usepackage{xcolor}
+\usepackage{enumitem}
+\usepackage{fancyhdr}
+\usepackage{parskip}
+\usepackage{microtype}
+\usepackage[numbers,sort&compress]{natbib}
+\usepackage{threeparttable}
+\usepackage{hyperref}
+
+% --- Header/Footer ---
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\small\textit{Path-Dependent Runtime AI Governance (Version 3 --- Open-Source Release \texttt{v1.0.3})}}
+\fancyhead[R]{\small\textit{Matthews, November 2026}}
+\fancyfoot[C]{\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+
+% --- Hyperlink styling ---
+\hypersetup{
+    colorlinks=true,
+    linkcolor=blue!70!black,
+    citecolor=blue!70!black,
+    urlcolor=blue!70!black,
+    pdfauthor={Patrick Matthews},
+    pdftitle={A Path-Dependent, Multi-Layered Architecture for Runtime Governance and Post-Quantum Cryptographic Assurance of Autonomous AI Agents (Version 3)},
+    pdfsubject={Runtime AI Agent Governance},
+    pdfkeywords={AI governance, autonomous agents, post-quantum cryptography, CIBA, runtime enforcement, defence-in-depth, ML-DSA-65, session taint, CaMeL, Rule of Two}
+}
+
+% --- Title ---
+\title{%
+    \textbf{A Path-Dependent, Multi-Layered Architecture for Runtime Governance and Post-Quantum Cryptographic Assurance of Autonomous AI Agents}\\[0.5em]
+    \large Version 3 --- Open-Source Reference Implementation Alignment (\texttt{v1.0.3})%
+}
+\author{%
+    Patrick Matthews\\
+    \textit{ASAI --- affinitysmartai.co.uk}\\
+    \texttt{contact@affinitysmartai.co.uk}\\[0.3em]
+    \small Repository: \url{https://github.com/affinity-ops/OS-Cicada} (Tag \texttt{v1.0.3})\\
+    \small SSRN Preprint: \url{https://papers.ssrn.com/sol3/papers.cfm?abstract_id=6612798}%
+}
+\date{7 November 2026 \quad \small(Original Version 2 published 8 June 2026)}
+
+% =============================================================================
+\begin{document}
+% =============================================================================
+
+\maketitle
+\thispagestyle{fancy}
+
+% =============================================================================
+\begin{abstract}
+% =============================================================================
+\noindent\textbf{Background:} As autonomous AI agents move from isolated experiments into operational environments, identity-only authentication and stateless request filtering do not account for the sequence of an agent's actions or the provenance of the data it ingests. Furthermore, recent adaptive evaluations demonstrate that static prompt-injection regexes, embedding thresholds, and classifier models are routinely bypassed by human red teams.
+
+\noindent\textbf{Architecture:} This paper describes a reference architecture for runtime governance of autonomous agents: an HTTP and Model Context Protocol (MCP) proxy gateway (\texttt{Sentry\_Gateway}) that evaluates each proposed action against the agent's registered purpose and server-side tool manifest, its recent action history within the session, and the provenance of the content it has processed. The architecture combines deterministic controls --- fine-grained resource policy, forward-saga prerequisite sequencing, server-side per-tool HTTP-method and URL-pattern scoping, impact-weighted rate limits, outbound credential/PII exfiltration checks, session taint tracking across all untrusted external responses, and a SHA-256 hash-chained audit trail --- with mandatory out-of-band human approval via Client-Initiated Backchannel Authentication (CIBA). Each CIBA approval is cryptographically bound to a decimal length-prefixed SHA-256 commitment over the uppercase HTTP method, canonicalised target URL, and raw request body bytes, paired with a per-hold \texttt{TraceID} nonce and connection-time DNS IP pinning (\texttt{proxyTransport.DialContext}). While short-lived per-request agent tokens (5-minute JIT session JWTs and 24-hour EVARs) use compact 64-byte classical Ed25519 (\texttt{EdDSA}) signatures to avoid HTTP header bloat, three high-consequence governance boundaries --- human CIBA approval decisions, inter-gateway P2P gossip quarantine broadcasts, and platform entitlement envelopes --- use hybrid Ed25519 and ML-DSA-65 (implementing the NIST FIPS~204 algorithm specification) signatures for long-term audit non-repudiation.
+
+\noindent\textbf{Results:} We release a preproduction open-source reference implementation under the Apache~2.0 license (\texttt{v1.0.3}), reconcile the 10 conceptual layers of the Matthews Enforcement Framework (MEF) with the gateway's 15-stage HTTP request lifecycle and 9-layer deterministic admission pipeline (\texttt{pipeline.Evaluate}), and provide a deterministic verification script (\texttt{bash ./scripts/count\_tests.sh}, wired into GitHub Actions CI) that verifies \textbf{1,299 top-level automated test definitions across 104 test files} in five languages (\textbf{810}~Go tests across 69 files --- \textbf{760} in \texttt{Sentry\_Gateway} across 65 files and \textbf{50} across \texttt{Shadow\_Sandbox}, \texttt{Mesh\_Directory}, and \texttt{Licensing\_Authority} --- plus \textbf{82}~PHP tests, \textbf{174}~Python tests, \textbf{179}~TypeScript/JavaScript tests, and \textbf{54}~Dart/Flutter tests), alongside \textbf{40}~Go \texttt{t.Run} subtests, \textbf{22}~table-driven adversarial corpus cases ($\text{TP}=19, \text{TN}=3, \text{FP}=0, \text{FN}=0$), \textbf{15}~Go micro-benchmarks, and \textbf{23}~live production-path end-to-end checks (\texttt{bash ./scripts/e2e\_production.sh}). Micro-benchmarks on a single development machine show sub-0.25\,ms isolated overhead for typical small payloads (0.190\,ms for a 120-byte injection scan; 0.006\,ms for lexical/cosine semantic scoring) and 1.530\,ms for a 1\,KB injection scan (bounded at 64\,KB input / 8\,KB Base64 candidate size). Under a 150\,req/sec k6 load test on a single machine, replacing 6--8 synchronous PostgreSQL queries per request with a Redis read-through cache (60\,s TTL) reduced p95 gateway latency from 1,610\,ms to 19\,ms (p99: 50.94\,ms in single-run \texttt{proxy\_load.js} over 7,472 requests; p99: 62.0\,ms across the 5-run aggregate mixed-attack suite \texttt{sentry\_gateway\_load.js}).
+
+\noindent\textbf{Limitations:} Because the evaluation relies on an author-written test corpus rather than an adaptive human red team, it demonstrates that the deterministic and heuristic controls execute as designed in code --- not that the heuristic classifiers resist an adaptive adversary. We provide an explicit component-by-component matrix distinguishing what is wired in code from what is deployment-supplied or architectural specification, document fail-open versus fail-closed behaviour across every stage, analyse taint-bypass and compromised-infrastructure boundaries, and state twelve operational limitations.
+\end{abstract}
+
+\vspace{0.5em}
+\noindent\textbf{Keywords:} AI agent governance, runtime enforcement, defence-in-depth, path-dependent policy, session taint, CaMeL, Rule of Two, CIBA, post-quantum cryptography, ML-DSA-65, Ed25519, FIPS~204, EU~AI~Act
+
+\newpage
+\tableofcontents
+\newpage
+
+% =============================================================================
+\section{Introduction and Summary of Revisions}
+\label{sec:introduction}
+% =============================================================================
+
+Autonomous AI agents interact with external APIs, databases, and peer agents at machine speed while ingesting natural-language instructions and untrusted third-party content. Traditional API gateways authenticate \emph{who} the caller is (via static API keys or OAuth bearer tokens) and evaluate \emph{stateless} access rules, but cannot answer three path-dependent questions required for governing tool-using agents:
+
+\begin{enumerate}[label=\arabic*., leftmargin=2em]
+    \item \textbf{Action Sequencing:} Did the agent complete required prerequisite steps (such as verifying a backup or inspecting record state) during the current session before attempting a destructive mutation?
+    \item \textbf{Data Provenance (Taint):} Has the agent ingested untrusted external content (such as an external web page, unverified retrieval-augmented generation chunk, or third-party tool output) earlier in the session that could hijack its subsequent write actions via indirect prompt injection?
+    \item \textbf{Cryptographic Approval Binding:} When a high-risk action is escalated to a human operator, is the human's out-of-band approval cryptographically bound to the exact HTTP method, canonical destination URL, and payload bytes that the gateway will forward, and is the destination IP pinned against DNS rebinding?
+\end{enumerate}
+
+Version~2 of this paper (8~June 2026)~\cite{matthewsv2} introduced the Matthews Enforcement Framework (MEF)~\cite{mef2026} and reported initial benchmarks from an internal preproduction build. Following the public open-source release of the reference implementation (\url{https://github.com/affinity-ops/OS-Cicada}) in November 2026 (release tag \texttt{v1.0.3}), this Version~3 revision updates the paper so that every architectural description, threshold, test count, and maturity claim aligns strictly with the publicly inspectable source code, \texttt{RELEASE\_SCOPE.md}, and automated continuous integration (CI) pipeline.
+
+\subsection{Headline Claims Supported by the Public Evidence}
+\label{subsec:headline-claims}
+
+To avoid any conflation between architectural goals and empirical evidence, this revision restricts its headline claims to four statements directly verifiable in the public repository:
+
+\begin{itemize}[leftmargin=2em]
+    \item \textbf{Deterministic controls apply as designed in automated tests.} Server-side tool manifest resolution, per-tool HTTP-method scoping, forward-saga prerequisite sequencing, fine-grained resource policies, and impact-weighted velocity limits execute deterministically on the gateway request path and are verified by automated unit tests (\texttt{bash ./scripts/count\_tests.sh}) and a 23-check production-path E2E suite (\texttt{scripts/e2e\_production.sh}).
+    \item \textbf{Human approvals are bound to a cryptographic hash of the method, canonical URL, body, and hold nonce.} When CIBA human-in-the-loop approval is triggered, the gateway holds the request synchronously in memory, computes a decimal length-prefixed SHA-256 commitment over the uppercase HTTP method, canonicalised target URL (\texttt{CanonicalizeURL}), and full untruncated request body (\texttt{internal/ciba/ciba.go}), transmits the full payload (\texttt{fullPayload := string(bodyBytes)}) to the operator, and verifies both the constant-time \texttt{ApprovedPayloadHash} match and the unique per-request \texttt{TraceID} hold nonce before forwarding over a DNS-pinned socket (\texttt{proxyTransport.DialContext}).
+    \item \textbf{After a session ingests untrusted content, state-changing requests are escalated for human approval.} When an agent session processes untrusted provenance headers or receives a response body from any external domain outside its trusted domain list (\texttt{CICADA\_TRUSTED\_DOMAINS}), the session is marked tainted (\texttt{internal/taint/taint.go}, scoped per \texttt{agent\_id} or per \texttt{X-Cicada-Session-ID} with a 15-minute sliding expiry). Subsequent state-changing requests (\texttt{POST}, \texttt{PUT}, \texttt{PATCH}, \texttt{DELETE}) are escalated for human approval (\texttt{ForceCIBA = true}).
+    \item \textbf{No claim of complete detection of prompt injection or goal substitution.} In light of adaptive attack research~\cite{nasr2025}, Layer~1 (injection scanning) and Layer~2 (semantic intent alignment) are positioned as low-latency baseline filters against non-adaptive noise, whereas the deterministic path-dependent controls, session taint, and payload-bound human approval provide the primary blast-radius boundaries.
+\end{itemize}
+
+\subsection{Changelog from the June 2026 Version}
+\label{subsec:changelog}
+
+Table~\ref{tab:changelog} lists the twelve substantive corrections made between the June 2026 text (Version~2) and this November 2026 revision (Version~3), together with the technical rationale for each change.
+
+\begin{small}
+\begin{longtable}{@{} p{2.6cm} p{3.6cm} p{5.2cm} p{4.0cm} @{}}
+\caption{Changelog of Substantive Corrections from Version 2 (June 2026) to Version 3 (November 2026)}
+\label{tab:changelog} \\
+\toprule
+\textbf{Area} & \textbf{June 2026 Text} & \textbf{November 2026 Revised Text} & \textbf{Reason} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Area} & \textbf{June 2026 Text} & \textbf{November 2026 Revised Text} & \textbf{Reason} \\
+\midrule
+\endhead
+\midrule
+\multicolumn{4}{r}{\textit{Continued on next page}} \\
+\bottomrule
+\endfoot
+\bottomrule
+\endlastfoot
+1.~Layer count & A 10-layer pipeline throughout & Name the 10 conceptual MEF layers and show how the 15-stage gateway lifecycle (\texttt{main.go} \& \texttt{RELEASE\_SCOPE.md}) and 9-layer \texttt{pipeline.Evaluate} path map onto them (Table~\ref{tab:layer-mapping}) & \texttt{RELEASE\_SCOPE.md}, \texttt{README.md}, and the code now use the identical 15-stage numbering \\
+\addlinespace
+2.~Test count \& CI script & 1,098 or 1,143 automated tests & Ships \texttt{scripts/count\_tests.sh} in CI verifying \textbf{1,299 top-level test definitions across 104 test files} (\textbf{760}~Go in \texttt{Sentry\_Gateway} + \textbf{50}~Go in 3 companion services = \textbf{810}~Go; \textbf{82}~PHP; \textbf{174}~Python; \textbf{179}~TS/JS; \textbf{54}~Dart), plus \textbf{40}~\texttt{t.Run} calls, \textbf{22}~corpus cases, \textbf{15}~benchmarks, and \textbf{23}~live E2E checks (Table~\ref{tab:test-suite}) & Eliminates missing-directory \texttt{grep} discrepancies and reconciles \texttt{Security\_Audit\_Test\_Results.md} with the live repo \\
+\addlinespace
+3.~Layer overhead \& bounds & Under 0.25\,ms per layer & Under 0.25\,ms for typical 120\,B payloads (0.190\,ms); 1.530\,ms for a 1\,KB injection scan; enforces 64\,KB input / 8\,KB Base64 candidate limits in \texttt{deobfuscate.go} & Prevents CPU/heap amplification on large multi-encoded payloads \\
+\addlinespace
+4.~Detection rate \& confusion matrices & 100\% detection of FGA violations; 100\% TPR on injection corpus & Reports exact confusion matrices for the 22-case \texttt{corpus.json} ($\text{TP}=19, \text{TN}=3, \text{FP}=0, \text{FN}=0$) and 249-case k6 mix ($\text{TP}=199, \text{TN}=50, \text{FP}=0, \text{FN}=0$, explaining $199/249=79.9\%$), noting both are static author-written baselines & Clarifies that $199/249$ is 100\% TPR / 0\% FPR on a mixed traffic stream containing 50 benign controls \\
+\addlinespace
+5.~Semantic Intent (MEF Layer~4) & 0.65 similarity threshold; zero false negatives on goal substitution & Thresholds are \textbf{0.35} (embedding) and \textbf{0.10} (word-overlap/taxonomy fallback), configurable; compares agent purpose with target URL host, path, and HTTP method (not the body); no detection guarantee & Verified directly from \texttt{internal/semantic/semantic.go} \\
+\addlinespace
+6.~Readiness & Deployable today at enterprise scale & Preproduction open-source reference implementation & Matches \texttt{README.md} and \texttt{RELEASE\_SCOPE.md} \\
+\addlinespace
+7.~EU AI Act & Layers mapped ahead of the August 2026 high-risk deadline & Cites Regulation (EU) 2026/1744 (Digital Omnibus on AI), deferring Annex~III obligations to 2~December 2027 and Annex~I to 2~August 2028; adds Article~26 (Deployer obligations); mapping shows technical support, not legal conformity & Reflects enacted EU Omnibus timeline and provider vs.\ deployer distinction \\
+\addlinespace
+8.~Quantum adversary \& PQC scope & Threat row: forging identity post-Shor; EVARs dual-signed & Clarifies that per-request EVAR/JIT tokens use compact classical Ed25519, while hybrid Ed25519 + ML-DSA-65 (FIPS~204 algorithm via \texttt{cloudflare/circl}) is wired at CIBA mobile approvals, P2P gossip batches, and entitlement envelopes & Matches cryptographic call sites and distinguishes FIPS~204 algorithm spec from FIPS~140-3 module validation \\
+\addlinespace
+9.~Related work \& standards & ``Recent industry analyses'' cites a 2022 report & Uses exact OWASP Agentic Top~10 (Dec 2025) names (\texttt{ASI04: Agentic Supply Chain Vulnerabilities}, \texttt{ASI07: Insecure Inter-Agent Communication}), NIST AI Agent Standards Initiative (17~Feb 2026), RFC~8693 vs.\ IETF \texttt{ID-JAG}, CaMeL, Rule of Two, and Nasr et al. & Current primary sources and exact standard identifiers \\
+\addlinespace
+10.~Archival links & Cited an unpublished Zenodo DOI (\texttt{10.5281/zenodo.19597120}) & Removes unresolvable Zenodo DOI across paper, \texttt{README.md}, and \texttt{CITATION.cff}, linking directly to GitHub (\url{https://github.com/affinity-ops/OS-Cicada}) and SSRN (\texttt{6612798}) & Ensures every link resolves cleanly \\
+\addlinespace
+11.~CIBA canonicalisation \& IP pinning & Informal \texttt{SHA-256(Method|URL|Body)} description & Specifies decimal length-prefixed commitment with \texttt{CanonicalizeURL}, \texttt{TraceID} hold-nonce check, full untruncated payload preview, header stripping, and \texttt{DialContext} IP pinning & Documents exact code in \texttt{internal/ciba/ciba.go} and \texttt{cmd/sentry/main.go} \\
+\addlinespace
+12.~Taint on all untrusted responses & Tainted only on \texttt{r.Method == http.MethodGet} & Taints whenever any request to an untrusted domain returns a non-empty response body (\texttt{len(respBody) > 0}), covering \texttt{POST} GraphQL/search/RPC reads & Closes \texttt{POST}-based untrusted read gap in \texttt{cmd/sentry/main.go} \\
+\end{longtable}
+\end{small}
+
+% =============================================================================
+\section{Related Work}
+\label{sec:related-work}
+% =============================================================================
+
+The security and governance of tool-using AI agents has matured rapidly between 2024 and 2026 across four research and standards tracks:
+
+\paragraph{Agentic Threat Taxonomies and Standards.}
+The \textbf{OWASP Top~10 for Agentic Applications} (December 2025)~\cite{owasp_agentic2025} defines ten operational risk categories for autonomous agents: Agent Goal Hijack (\texttt{ASI01}), Tool Misuse and Exploitation (\texttt{ASI02}), Identity and Privilege Abuse (\texttt{ASI03}), Agentic Supply Chain Vulnerabilities (\texttt{ASI04}), Unexpected Code Execution (\texttt{ASI05}), Memory and Context Poisoning (\texttt{ASI06}), Insecure Inter-Agent Communication (\texttt{ASI07}), Cascading Failures (\texttt{ASI08}), Human-Agent Trust Exploitation (\texttt{ASI09}), and Rogue Agents (\texttt{ASI10}). Concurrently, the \textbf{NIST AI Agent Standards Initiative} (launched 17~February 2026 by CAISI)~\cite{nist_agent2026} and the \textbf{NIST AI Risk Management Framework (AI RMF 1.0)}~\cite{nist} emphasise runtime observability, cryptographic attribution, and bounded autonomy.
+
+\paragraph{Adaptive Attacks Against Classifier Defences.}
+In \emph{``The Attacker Moves Second''} (2025)~\cite{nasr2025}, researchers from OpenAI, Anthropic, and Google DeepMind evaluated 12 published jailbreak and prompt-injection defences using adaptive automated and human red-team attacks, bypassing nearly all classifier-, perplexity-, and heuristic-based defences at $>90\%$ attack success rates despite prior static benchmark claims of near-zero vulnerability. This result demonstrates that static regex libraries and lightweight semantic classifiers cannot be relied upon as hard security boundaries against adaptive adversaries; instead, runtime governance must enforce \textbf{deterministic capability boundaries, information-flow taint tracking, and out-of-band human authorisation} downstream of the model.
+
+\paragraph{Information-Flow Isolation: CaMeL and the Agents Rule of Two.}
+Debenedetti et al.\ (2025) introduced \textbf{CaMeL} (\emph{Capabilities for Machine Learning})~\cite{camel2025}, showing that tracking data provenance across tool invocations prevents indirect prompt injections from triggering unauthorised state mutations. Relatedly, \textbf{Meta AI's Agents Rule of Two} (2025)~\cite{meta_ruleoftwo2025} proposes that an autonomous agent session should never simultaneously satisfy all three legs of the \texttt{[ABC]} risk trifecta without human oversight: (A)~processing untrusted inputs, (B)~accessing sensitive data or credentials, and (C)~mutating external state or communicating externally. Our gateway operationalises both principles at the HTTP/MCP proxy layer via \texttt{internal/taint} (runtime session taint tracking) and \texttt{internal/policy/sanitizer.go} (registration-time \texttt{[ABC]} trifecta validation).
+
+\paragraph{Path-Dependent Runtime Governance.}
+Kaptein et al.\ (2026)~\cite{kaptein2026} formalised path-dependent policy evaluation for AI agents --- policies defined over historical action sequences $(a_1, a_2, \dots, a_t)$ rather than isolated requests. Mazzocchetti~\cite{mazzocchetti2026}, DeRudder~\cite{derudder2026}, Emerson~\cite{emerson2026}, Mar\'{i}n and Chaudhary~\cite{marin2026}, and Sawaf~\cite{sawaf2026} further explore cryptographic runtime governance, computable trust, and externalised judgment infrastructure. Our work contributes an open-source reference proxy combining path-dependent prerequisite and taint evaluation with hybrid post-quantum CIBA approval binding.
+
+% =============================================================================
+\section{The Governance Architecture}
+\label{sec:architecture}
+% =============================================================================
+
+\subsection{Reconciling the 10 Framework Layers, 15-Stage Proxy Lifecycle, and 9-Layer Admission Pipeline}
+\label{subsec:reconciliation}
+
+To eliminate ambiguity between conceptual documentation and source code, Table~\ref{tab:layer-mapping} maps the \textbf{10 conceptual layers} of the Matthews Enforcement Framework (\texttt{docs/MATTHEWS\_ENFORCEMENT\_FRAMEWORK.md})~\cite{mef2026} onto the \textbf{15-stage HTTP proxy request lifecycle} in \texttt{Sentry\_Gateway/cmd/sentry/main.go} (and \texttt{RELEASE\_SCOPE.md}~\S1) and the \textbf{9-layer deterministic admission function} (\texttt{pipeline.Evaluate} in \texttt{Sentry\_Gateway/internal/pipeline/pipeline.go}).
+
+\begin{small}
+\begin{longtable}{@{} p{2.2cm} p{3.8cm} p{3.0cm} p{3.2cm} p{3.2cm} @{}}
+\caption{Reconciliation of the 15-Stage Gateway Lifecycle, 9-Layer \texttt{pipeline.Evaluate}, and 10 Conceptual MEF Layers}
+\label{tab:layer-mapping} \\
+\toprule
+\textbf{Phase} & \textbf{15-Stage Proxy Lifecycle (\texttt{main.go})} & \textbf{9-Layer Admission (\texttt{pipeline.Evaluate})} & \textbf{Conceptual MEF Layer (\texttt{docs/})} & \textbf{Source Package} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Phase} & \textbf{15-Stage Proxy Lifecycle (\texttt{main.go})} & \textbf{9-Layer Admission (\texttt{pipeline.Evaluate})} & \textbf{Conceptual MEF Layer (\texttt{docs/})} & \textbf{Source Package} \\
+\midrule
+\endhead
+\bottomrule
+\endfoot
+Pre-Admission & \textbf{Stage 1:} Cryptographic Auth (Ed25519 EVAR/JIT, RFC~9449 DPoP, RFC~8693 + ID-JAG), Certification \& Residency & *(Pre-pipeline)* & Identity Pillar \& MEF Layer~8 & \texttt{internal/auth}, \texttt{internal/session} \\
+\addlinespace
+Pre-Admission & \textbf{Stage 2:} Tier-1 SSRF \& Cloud Metadata Guard & *(Pre-pipeline)* & MEF Layer~2 (Perimeter) & \texttt{internal/ssrf} \\
+\addlinespace
+Pre-Admission & \textbf{Stage 3:} ASI07 Hop Chain \& ASI04 JSON Schema Skill Contract & *(Pre-pipeline)* & MEF Layer~3 \& Layer~3b & \texttt{internal/chain}, \texttt{internal/agentcache} \\
+\addlinespace
+Pre-Admission & \textbf{Stage 4:} Gossip Quarantine, Ghost Mode, Canary Trap \& FGA Glob & *(Pre-pipeline)* & MEF Layer~7c (FGA) \& Deception & \texttt{internal/gossip}, \texttt{canary}, \texttt{fga} \\
+\addlinespace
+Admission & \textbf{Stage 5:} 7-Stage Deobfuscation (64\,KB cap) \& Injection Scan & \textbf{Layer 1 (\texttt{injection\_scan})} & \textbf{MEF Layers 1 \& 2} (Injection \& Normalisation) & \texttt{internal/injection}, \texttt{internal/slm} \\
+\addlinespace
+Admission & \textbf{Stage 6:} Semantic Intent \& Verb Contradiction & \textbf{Layer 2 (\texttt{semantic\_intent})} & \textbf{MEF Layer 4} (Semantic Alignment) & \texttt{internal/semantic} \\
+\addlinespace
+Admission & \textbf{Stage 7:} Impact-Weighted Velocity Limiter & \textbf{Layer 3 (\texttt{velocity})} & \textbf{MEF Layer 6} (Contextual Rate/Risk) & \texttt{internal/velocity} \\
+\addlinespace
+Admission & \textbf{Stage 8:} Non-Self-Poisoning Drift Guard & \textbf{Layer 4 (\texttt{drift\_guard})} & \textbf{MEF Layer 5} (Behavioural Drift) & \texttt{internal/drift} \\
+\addlinespace
+Admission & \textbf{Stage 9:} Forward-Saga Prerequisite Check & \textbf{Layer 5 (\texttt{prerequisite})} & \textbf{MEF Layer 7a} (Path Prerequisites) & \texttt{internal/prerequisite} \\
+\addlinespace
+Admission & \textbf{Stage 10:} Server-Side Tool Manifest \& Method Scoping & \textbf{Layer 6 (\texttt{tool\_scope})} & \textbf{MEF Layer 7b} (Facet Binding) & \texttt{internal/toolscope}, \texttt{internal/agentcache} \\
+\addlinespace
+Admission & \textbf{Stage 11:} Blast Radius \& 33-Pattern Destructive Classifier & \textbf{Layer 7 (\texttt{blast\_radius})} & \textbf{MEF Layer 7c \& Layer 10 Trigger} & \texttt{internal/blastradius}, \texttt{internal/hitl} \\
+\addlinespace
+Admission & \textbf{Stage 12:} Multivariate Financial Profiler \& Deontic Rules & \textbf{Layer 8 (\texttt{tx\_profile})} & \textbf{MEF Layer 6} (Contextual Risk) & \texttt{internal/txprofile} \\
+\addlinespace
+Admission & \textbf{Stage 13:} CaMeL Session Taint \& Rule-of-Two Check & \textbf{Layer 9 (\texttt{camel\_taint})} & \textbf{MEF Layer 7 \& Layer 10 Trigger} & \texttt{internal/taint} \\
+\addlinespace
+Post-Admission & \textbf{Stage 14:} In-Memory OPA Rego, CIBA Payload-Hash Hold \& EAKF Sandbox & *(Post-pipeline, pre-upstream)* & \textbf{MEF Layer 7c, Layer 8 \& Layer 10} & \texttt{internal/policy}, \texttt{ciba}, \texttt{cmd/eakfd} \\
+\addlinespace
+Egress / Audit & \textbf{Stage 15:} Vault-Aware Outbound DLP, ASI08 Cascade, Response Tainting \& Hash-Chained Ledger & *(Post-upstream response)* & \textbf{MEF Layer 8 (DLP) \& Layer 9 (Ledger)} & \texttt{internal/output}, \texttt{cascade}, \texttt{ledger} \\
+\end{longtable}
+\end{small}
+
+\subsection{Detailed Layer Behaviour and Code-Verified Thresholds}
+\label{subsec:layer-details}
+
+\paragraph{Pre-Admission Perimeter (Stages 1--4).}
+Prior to calling \texttt{pipeline.Evaluate}, the gateway verifies the agent's Ed25519 Enterprise Verified Agent Record (EVAR, 24h) or JIT session JWT (5m default in \texttt{internal/session}, up to 15m TTL), checks optional RFC~9449 DPoP and RFC~8693 token exchange with IETF \texttt{oauth-identity-assertion-authz-grant} (\texttt{ID-JAG}) human-delegation claims~\cite{ciba}, enforces agent certification state (\texttt{pending\_review} agents are restricted to read-only shadow observation; \texttt{suspended} and \texttt{terminated} agents are rejected), verifies regional data residency, and checks the target URL with \texttt{ssrf.ValidateOutboundURL} (\texttt{internal/ssrf/ssrf.go}) to block private IPv4/IPv6 ranges, CGNAT (\texttt{100.64.0.0/10}), and cloud metadata addresses (\texttt{169.254.169.254}). It then checks the lock-free P2P gossip quarantine table (\texttt{internal/gossip}), scans for multi-encoded canary honeytokens (\texttt{CICADA\_CANARY\_*} in raw, Base64, Hex, URL-encoded, or SHA-256 form via \texttt{internal/canary}), and checks Fine-Grained Authorisation (FGA) URL-glob and HTTP-method allowlists (\texttt{internal/fga}).
+
+\paragraph{Pipeline Layer 1: Deobfuscation and Structural Injection Scan (\texttt{injection\_scan}).}
+Implemented in \texttt{internal/injection/scanner.go} and \texttt{deobfuscate.go}. Payloads pass through a 7-stage recursive deobfuscator (capped at \texttt{maxDeobfuscationDepth = 4} passes, \texttt{MaxDeobfuscationInputBytes = 64\,KB} per pass, and \texttt{MaxBase64CandidateBytes = 8\,KB} per inline Base64 candidate to prevent CPU/memory amplification) that applies Unicode \texttt{NFKC} normalisation, strips zero-width characters, normalises Cyrillic/Greek homoglyphs, URL-decodes percent encodings, unescapes named and numeric HTML entities (\texttt{html.UnescapeString}, catching numeric entities such as \texttt{\&\#105;\&\#103;...} inside non-HTML JSON strings), decodes hex/Unicode escapes, and unpacks inline Base64 strings. The normalised string is tested against 36 compiled regex signatures and an HTML/CSS hidden-DOM detector (\texttt{display:none}, \texttt{opacity:0}, \texttt{font-size:0}). An optional SLM sidecar (\texttt{internal/slm}) is off by default and configured with a 50\,ms hard timeout in fail-open mode.
+
+\paragraph{Pipeline Layer 2: Semantic Intent Alignment (\texttt{semantic\_intent}).}
+Implemented in \texttt{internal/semantic/semantic.go} and \texttt{taxonomy.go}. Correcting the June 2026 text (which cited a 0.65 threshold and claimed zero false negatives), \texttt{semantic.Check} compares the agent's declared description and type against the \textbf{target URL host, path tokens, and HTTP method} --- not the request body. When an embedding server (\texttt{EMBEDDING\_SERVICE\_URL}) is configured, cosine similarity is checked against a configurable default threshold of \textbf{0.35} (\texttt{SEMANTIC\_BLOCK\_THRESHOLD}). When no embedding service is reachable, it falls back to a deterministic word-overlap and domain-taxonomy check with a default threshold of \textbf{0.10} (\texttt{SEMANTIC\_JACCARD\_BLOCK\_THRESHOLD}), paired with a read-vs-mutation verb contradiction engine (\texttt{taxonomy.go}) that blocks read-only agent descriptions attempting \texttt{DELETE}/\texttt{PUT}/\texttt{POST} mutations. It provides coarse domain-mismatch filtering without any guarantee of complete goal-substitution detection.
+
+\paragraph{Pipeline Layer 3: Impact-Weighted Velocity (\texttt{velocity}).}
+Implemented in \texttt{internal/velocity/velocity.go}. Enforces sliding-window rate limits weighted by HTTP method impact using a $3.0\sigma$ z-score threshold over a 60-minute historical window (or a 50~writes/min static threshold during the first 5 minutes). In production mode (\texttt{FailClosed = true}), the layer fails closed if Redis is unreachable; in development or simulation mode, it logs a warning and fails open.
+
+\paragraph{Pipeline Layer 4: Behavioural Drift Guard (\texttt{drift\_guard}).}
+Implemented in \texttt{internal/drift/drift.go}. Compares each action fingerprint against the agent's sliding-window centroid in Redis. Drift detection sets \texttt{ForceCIBA = true} (escalating to human review rather than blocking outright) and \textbf{does not update the baseline centroid when drift is detected}, preventing gradual baseline poisoning. Cold-start agents with no history skip this check.
+
+\paragraph{Pipeline Layer 5: Forward-Saga Prerequisite Sequencing (\texttt{prerequisite}).}
+Implemented in \texttt{internal/prerequisite/prerequisite.go}. Verifies in Redis that any prerequisite tools declared in the agent's tool manifest were completed within their configured time window before allowing a dependent tool to execute. Two fail-closed invariants are enforced: (i)~prerequisite completion (\texttt{RecordToolCompletion}) is recorded \textbf{only after the upstream server returns an HTTP \texttt{2xx} or \texttt{3xx} response}, and (ii)~an expired or unparseable Redis timestamp is immediately evicted (\texttt{DEL}) and treated as unsatisfied.
+
+\paragraph{Pipeline Layer 6: Server-Side Tool Manifest and Method Scoping (\texttt{tool\_scope}).}
+Implemented in \texttt{internal/toolscope/toolscope.go} and \texttt{internal/agentcache/agentcache.go} (\texttt{ResolveToolForRequest}). An unknown client-supplied \texttt{X-Cicada-Tool-ID} is denied immediately. Tools are resolved by explicit \texttt{URLPattern} globs (which pin the target hostname when a host is included in the pattern) or by canonical URL path segments, and the request's HTTP method and JSON parameters are validated against the tool's declared scope (\texttt{read}, \texttt{write}, \texttt{admin}). By default, agents registered with zero rows in \texttt{agent\_tools} skip Layers~5 and~6 (relying on coarse RBAC and FGA globs); setting \texttt{CICADA\_REQUIRE\_TOOL\_MANIFEST=true} forces Layer~6 to deny requests (\texttt{403 unmapped\_tool\_manifest}) from any agent without a registered tool manifest.
+
+\paragraph{Pipeline Layer 7: Destructive Action Classification and Blast Radius (\texttt{blast\_radius}).}
+Implemented in \texttt{internal/blastradius/blastradius.go} and \texttt{internal/hitl/hitl.go} (\texttt{ClassifyDestructiveAction}). Blocks unbounded SQL/shell deletions (\texttt{DROP}, \texttt{TRUNCATE}, \texttt{DELETE} with \texttt{WHERE 1=1}, \texttt{rm -rf}) and evaluates 33 destructive semantic patterns --- including non-\texttt{DELETE} operations such as object-storage lifecycle expiration rules, backup suspension, and snapshot deletion --- escalating bounded destructive operations to CIBA human approval.
+
+\paragraph{Pipeline Layer 8: Multivariate Financial Transaction Profiler (\texttt{tx\_profile}).}
+Implemented in \texttt{internal/txprofile/txprofile.go}. Evaluates financial transfer fields (\texttt{amount}, \texttt{recipient}, \texttt{iban}) against per-agent z-score baselines and deontic constraints, escalating anomalous transactions to CIBA.
+
+\paragraph{Pipeline Layer 9: CaMeL Session Taint, Response Tainting, and Bypass Analysis (\texttt{camel\_taint}).}
+Implemented in \texttt{internal/taint/taint.go} and \texttt{cmd/sentry/main.go}. Marks an agent session tainted when it (a)~ingests untrusted provenance headers (\texttt{untrusted}, \texttt{external\_web}, \texttt{rag}, \texttt{user\_upload}, \texttt{third\_party\_tool}, \texttt{mcp\_untrusted}), (b)~performs an HTTP \texttt{GET} --- or \textbf{any HTTP request (\texttt{POST}, \texttt{PUT}, \texttt{PATCH}, \texttt{DELETE}, such as a GraphQL query or search RPC) that returns a non-empty response body (\texttt{len(respBody) > 0})} --- to a domain not on \texttt{CICADA\_TRUSTED\_DOMAINS} (\texttt{main.go:3117, 4700}), (c)~processes LLM tool-role outputs, or (d)~enters Ghost Mode. Taint is scoped per \texttt{agent\_id}, or per \texttt{agent\_id:session\_id} (\texttt{taint.ScopeKey}) when \texttt{X-Cicada-Session-ID} is provided, with a default sliding expiry of 15 minutes (matching the 15-minute JIT session token ceiling). While tainted, any state-changing request (\texttt{POST}, \texttt{PUT}, \texttt{PATCH}, \texttt{DELETE}) sets \texttt{ForceCIBA = true} to require human approval. Potential bypasses are bounded as follows: \texttt{CheckSessionOrAgent} checks both \texttt{agent\_id:session\_id} and the parent \texttt{agent\_id} key; waiting out the 15-minute TTL also expires the 15-minute JIT session token; and cross-agent delegation is tracked via Stage~3 (\texttt{internal/chain}) and Stage~15 (\texttt{internal/cascade} trace contamination tainting).
+
+\subsection{Fail-Open vs.\ Fail-Closed Defaults and Threat Model Boundaries}
+\label{subsec:fail-modes}
+
+Table~\ref{tab:fail-modes} summarises the failure behaviour of every gateway dependency, and Section~\ref{sec:limitations} details the compromised-infrastructure boundaries (including Redis, PostgreSQL, and external anchoring of the Stage~15 SHA-256 hash-chained ledger head).
+
+\begin{small}
+\begin{longtable}{@{} p{4.4cm} p{3.8cm} p{3.4cm} p{3.8cm} @{}}
+\caption{Fail-Open vs.\ Fail-Closed Behaviour Across Gateway Stages and Dependencies}
+\label{tab:fail-modes} \\
+\toprule
+\textbf{Subsystem / Condition} & \textbf{Production (\texttt{DEV\_MODE=false})} & \textbf{Dev / Sim (\texttt{DEV\_MODE=true})} & \textbf{Configuration Knob} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Subsystem / Condition} & \textbf{Production (\texttt{DEV\_MODE=false})} & \textbf{Dev / Sim (\texttt{DEV\_MODE=true})} & \textbf{Configuration Knob} \\
+\midrule
+\endhead
+\bottomrule
+\endfoot
+PostgreSQL down on cache miss & \textbf{Fail-Closed (\texttt{403}/\texttt{500})} & Uses simulated profile in \texttt{SIMULATION\_MODE} & \texttt{internal/agentcache} (60\,s Redis TTL) \\
+\addlinespace
+Redis down in Layer~3 (\texttt{velocity}) & \textbf{Fail-Closed (\texttt{429}/\texttt{403})} & \textbf{Fail-Open} (logs warning) & \texttt{FailClosed = !devMode} \\
+\addlinespace
+Redis down in Layer~5 (\texttt{prerequisite}) & \textbf{Fail-Closed (\texttt{403})} & \textbf{Fail-Closed (\texttt{403})} & Enforced whenever tool declares prerequisites \\
+\addlinespace
+Redis down in Layer~9 (\texttt{taint}) & \textbf{In-Memory Fallback (\texttt{sync.Map})} & \textbf{In-Memory Fallback (\texttt{sync.Map})} & Preserves single-node taint state \\
+\addlinespace
+Zero tools in \texttt{agent\_tools} (Layers 5 \& 6) & \textbf{Opt-In Skip} by default; \textbf{Fail-Closed (\texttt{403})} if configured & Same as production & \texttt{CICADA\_REQUIRE\_TOOL\_MANIFEST=true} \\
+\addlinespace
+Cold-start agent ($<3$ actions in Layer~4) & \textbf{Skips drift escalation} & Same as production & Populates initial centroid window \\
+\addlinespace
+Single moderate signal $0.30$--$0.59$ (\texttt{hitl}) & \textbf{Shadow Auto-Approve}; \textbf{Fail-Closed to CIBA} if configured & Same as production & \texttt{HITL\_SINGLE\_SIGNAL\_MODE=enforce} \\
+\addlinespace
+\texttt{EMBEDDING\_SERVICE\_URL} down (>2\,s) & \textbf{Deterministic Fallback} to Jaccard (\texttt{0.10}) + Verb Contradiction & Same as production & \texttt{SEMANTIC\_JACCARD\_BLOCK\_THRESHOLD} \\
+\addlinespace
+\texttt{SLM\_SERVICE\_URL} down (>50\,ms) & \textbf{Fail-Open} to 7-Stage Deobfuscator + 36 Regexes + CSS DOM & Same as production & \texttt{SLM\_SERVICE\_URL} (optional sidecar) \\
+\addlinespace
+\texttt{eakfd} socket down when \texttt{EAKFEnabled} & \textbf{Fail-Closed (\texttt{503})} & \textbf{Fail-Closed (\texttt{503})} & Server-side tool manifest flag \\
+\addlinespace
+CIBA timeout (120\,s), deny, disconnect, or hash/\texttt{TraceID} mismatch & \textbf{Fail-Closed (\texttt{403})} & Same as production & \texttt{RequireBinding = true} \\
+\addlinespace
+DNS resolves to RFC~1918 / IMDS at dial time & \textbf{Fail-Closed (\texttt{403})} & \textbf{Fail-Closed (\texttt{403})} & \texttt{proxyTransport.DialContext} IP pinning \\
+\end{longtable}
+\end{small}
+
+% =============================================================================
+\section{Post-Quantum Identity and Payload-Bound CIBA Approval}
+\label{sec:pqc}
+% =============================================================================
+
+\subsection{Where Hybrid Signatures (\texttt{Ed25519 + ML-DSA-65}) Run vs.\ Classical \texttt{Ed25519}}
+\label{subsec:pqc-reframing}
+
+Per-request agent JWTs --- 24-hour Enterprise Verified Agent Records (EVARs in \texttt{internal/auth/evar\_minter.go}) and 5-minute Just-In-Time (JIT) session tokens (\texttt{internal/session/session.go}) --- are signed with compact classical \textbf{Ed25519} (\texttt{EdDSA}, 64-byte signature) to avoid adding a 3,309-byte ML-DSA-65 signature to every HTTP request header.
+
+Hybrid \textbf{Ed25519 + ML-DSA-65} (implementing the NIST FIPS~204 ML-DSA-65 algorithm specification via \texttt{cloudflare/circl/sign/mldsa/mldsa65} in \texttt{pkg/pqc/mldsa.go} on the gateway and \texttt{liboqs} on mobile companions; note that CIRCL implements the FIPS~204 algorithm in pure Go rather than a FIPS~140-3 CMVP-validated hardware module)~\cite{fips204} is wired at three high-consequence governance and control-plane boundaries:
+\begin{enumerate}[label=\arabic*., leftmargin=2em]
+    \item \textbf{Mobile CIBA Human Approval Decisions (\texttt{internal/mobile/handlers\_lifecycle.go}):} Operator approvals/denials sign \texttt{hold\_ref|decision|decision\_nonce|gateway\_timestamp|hold\_payload\_hash} with both Ed25519 and ML-DSA-65 (mandatory when \texttt{CICADA\_ENFORCE\_PQC=true}, and verified whenever an ML-DSA-65 signature is present).
+    \item \textbf{Inter-Gateway P2P Gossip Quarantine Mesh (\texttt{internal/gossip/peer.go}):} Emergency agent quarantine broadcasts across gateway nodes are dual-signed (\texttt{X-Gossip-Sig-Ed25519} and \texttt{X-Gossip-Sig-MLDSA65}) and verified via \texttt{VerifyBatchSignature}.
+    \item \textbf{Platform Entitlement and Vendor Authentication (\texttt{internal/license/enforcer.go}):} Binary entitlement files and Sentinel vendor challenges require valid dual signatures.
+\end{enumerate}
+Rather than addressing a live agent-hijacking threat today, hybrid signatures at these three boundaries protect \textbf{long-lived human authorisation records and control-plane directives} that must remain non-repudiable over multi-year retention windows. While signature verification paths are covered by automated unit tests, the cryptographic code has not undergone an independent third-party audit.
+
+\subsection{Cryptographic Payload-Hash Binding, Synchronous Hold, and DNS Pinning in CIBA}
+\label{subsec:ciba-hash}
+
+When a request triggers CIBA human approval~\cite{ciba}, the gateway (\texttt{internal/ciba/ciba.go} and \texttt{cmd/sentry/main.go}) enforces six concrete invariants:
+\begin{enumerate}[label=\arabic*., leftmargin=2em]
+    \item \textbf{URL Canonicalisation and Decimal Length-Prefixed SHA-256 Commitment (\texttt{ciba.go:41-89}):} The target URL is normalised via \texttt{CanonicalizeURL(rawURL)} (lowercasing scheme and host, stripping default \texttt{:80}/\texttt{:443} ports, and removing \texttt{\#fragment}), and the commitment is computed over uppercase method $M$, canonical URL $U_{\text{canon}}$, and raw buffered body bytes $B$:
+    \begin{equation}
+        H_{\text{payload}} = \operatorname{SHA-256}\!\left(\texttt{fmt.Sprintf}(\text{``\%d:\%s\textbackslash n\%d:\%s\textbackslash n\%d:''}, \operatorname{len}(M), M, \operatorname{len}(U_{\text{canon}}), U_{\text{canon}}, \operatorname{len}(B)) \,\|\, B\right)
+    \end{equation}
+    \item \textbf{Full Untruncated Payload Transmission (\texttt{main.go:2559, 2639}):} The gateway sends \texttt{fullPayload := string(bodyBytes)} as \texttt{PayloadPreview} so the operator inspects the exact request body rather than an LLM summary.
+    \item \textbf{Synchronous In-Memory Hold and Disconnect Abort (\texttt{ciba.go:170-215}):} The HTTP request is held synchronously in memory via \texttt{ciba.Authorize(r.Context(), ...)}; if the caller disconnects, \texttt{<-ctx.Done()} aborts the hold immediately.
+    \item \textbf{Constant-Time Hash and \texttt{TraceID} Nonce Verification (\texttt{ciba.go:188-206}):} Before releasing the hold, the gateway verifies that the poll response's \texttt{TraceID} matches \texttt{req.TraceID} (preventing cross-hold replay) and that \texttt{subtle.ConstantTimeCompare} confirms \texttt{approved\_payload\_hash} equals $H_{\text{payload}}$.
+    \item \textbf{Header Stripping on Upstream Forward (\texttt{main.go:3038-3046}):} Client \texttt{Authorization} and all \texttt{X-Cicada-*} headers are stripped, only \texttt{Content-Type}, \texttt{Accept}, \texttt{Content-Encoding}, and \texttt{Content-Length} from the in-memory \texttt{r.Header} are copied, and the tenant's BYOK vault key is injected.
+    \item \textbf{Connection-Time DNS Resolution and IP Pinning (\texttt{main.go:1748-1792}):} At forward time, \texttt{proxyTransport.DialContext} resolves DNS, rejects loopback/RFC~1918/link-local/CGNAT/ULA addresses, dials the validated IP literal directly (\texttt{validIP.IP.String()}), and disables redirects (\texttt{http.ErrUseLastResponse}), preventing TOCTOU DNS rebinding during the 120-second approval window.
+\end{enumerate}
+
+% =============================================================================
+\section{Implemented vs.\ Designed Component Matrix (\texttt{v1.0.3})}
+\label{sec:implemented-vs-designed}
+% =============================================================================
+
+Table~\ref{tab:impl-vs-designed} reports the exact implementation status of each architectural component in the public repository at tag \texttt{v1.0.3} (7~November 2026), distinguishing between code wired and tested in the repository and capabilities that are deployment-supplied or design-only specifications.
+
+\begin{small}
+\begin{longtable}{@{} p{3.6cm} p{2.6cm} p{9.2cm} @{}}
+\caption{Implemented vs.\ Designed Status at Release \texttt{v1.0.3} (7 November 2026)}
+\label{tab:impl-vs-designed} \\
+\toprule
+\textbf{Component} & \textbf{Status} & \textbf{What the Code Shows (\texttt{OS-Cicada} \texttt{v1.0.3})} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Component} & \textbf{Status} & \textbf{What the Code Shows (\texttt{OS-Cicada} \texttt{v1.0.3})} \\
+\midrule
+\endhead
+\bottomrule
+\endfoot
+Admission pipeline (\texttt{pipeline.Evaluate}) & Wired & Four active call sites in \texttt{cmd/sentry/main.go} (\texttt{handleAgentRequest}, \texttt{handleSimulatedRequest}, \texttt{handleLLMProxy}, and \texttt{handleMCPExecution}). \texttt{RELEASE\_SCOPE.md} holds the full handler parity matrix; \texttt{handleGhostProxy} is a post-admission deception sink. \\
+\addlinespace
+Layer~1 deobfuscation \& injection scan & Wired & 7-stage recursive deobfuscator (capped at 4 passes, 64\,KB input, 8\,KB Base64 candidate) + 36 regexes + CSS DOM scan. Static heuristic baseline; does not stop adaptive natural-language attacks. \\
+\addlinespace
+Semantic intent check & Wired & Compares agent purpose with target URL host, path, and HTTP method (not the body). Thresholds are \texttt{0.35} (embedding) and \texttt{0.10} (word-overlap/taxonomy fallback when the embedding service is down), plus verb contradiction rules in \texttt{taxonomy.go}. \\
+\addlinespace
+Prerequisite sequencing & Wired & Completion recorded in Redis only after an upstream \texttt{2xx} or \texttt{3xx} response. An expired or unparseable Redis timestamp is evicted and fails closed. Agents with no tool manifest skip it unless \texttt{CICADA\_REQUIRE\_TOOL\_MANIFEST=true}. \\
+\addlinespace
+Per-tool method scoping & Wired & Unknown client tool IDs are denied. Tools are matched by explicit \texttt{URLPattern} binding (including host pinning) or URL path segments. Agents with no tool manifest skip it unless \texttt{CICADA\_REQUIRE\_TOOL\_MANIFEST=true} is set. \\
+\addlinespace
+Impact-weighted velocity & Wired & Fails closed without Redis in production mode (\texttt{FailClosed = true}); falls back in development or simulation mode. \\
+\addlinespace
+Drift guard & Wired & Escalates to CIBA on drift; baseline centroid is not updated when drift is detected. Skips cold-start agents with no history. \\
+\addlinespace
+Destructive-action classification (Layer~7) & Wired & \texttt{ClassifyDestructiveAction} (33 patterns including non-\texttt{DELETE} lifecycle/backup/snapshot mutations) and \texttt{blastradius.Evaluate} are called from \texttt{pipeline.Evaluate}. \\
+\addlinespace
+Session taint (Layer~9) & Wired & Set on untrusted provenance headers, or on any external request (\texttt{GET} or non-empty response body on \texttt{POST}/\texttt{PUT}/\texttt{PATCH}/\texttt{DELETE}) to a domain not on \texttt{CICADA\_TRUSTED\_DOMAINS}. Scoped per \texttt{agent\_id}, or per \texttt{X-Cicada-Session-ID} (\texttt{taint.ScopeKey}). Default expiry 15~minutes. \\
+\addlinespace
+Approval payload hash \& IP pinning & Wired & Decimal length-prefixed SHA-256 hash of uppercase method, \texttt{CanonicalizeURL(URL)}, and full body, plus \texttt{TraceID} hold-nonce check, verified before forwarding over \texttt{DialContext} IP-pinned socket. Automated CI tests the gateway/API round trip; live phone push requires FCM/APNs credentials. \\
+\addlinespace
+Canary honeytokens & Wired & Multi-encoding detector plus authenticated operator issue and revoke routes under \texttt{POST /v1/admin/canary/issue} and \texttt{/revoke} (with Redis persistence and in-memory fallback). \\
+\addlinespace
+Federation configuration & Present & Package \texttt{internal/federation} plus \texttt{federation\_providers}, \texttt{federated\_sessions}, \texttt{federation\_audit\_log}, and \texttt{role\_mappings} tables in \texttt{001\_isolated\_schema.sql}. \\
+\addlinespace
+Rule of Two registration check & Wired & Rule \texttt{RULE\_OF\_TWO\_TRIFECTA} and \texttt{destructive\_capability} contradiction checks in \texttt{internal/policy/sanitizer.go}. \\
+\addlinespace
+SLM injection classifier & Optional, off by default & 50\,ms hard timeout to external sidecar; never blocks when unreachable. \\
+\addlinespace
+Hybrid Ed25519 \& ML-DSA-65 signing & Present, not externally audited & Implemented via Go \texttt{crypto/ed25519} and \texttt{cloudflare/circl/sign/mldsa/mldsa65} (FIPS~204 algorithm spec); license agent-count (\texttt{GetMaxAgents}) and mesh (\texttt{MeshAllowed}) limits enforced. No independent cryptographic or FIPS~140-3 module audit performed. \\
+\addlinespace
+Code-execution sandbox (\texttt{cmd/eakfd}) & Implemented, opt-in & Subprocess execution with temporary directory, timeout, minimal environment, and 3-pass output secret scrubbing (\texttt{internal/eakfd/scrub}). Gateway decides server-side from the agent manifest (\texttt{req.EAKFEnabled}) whether to invoke it, not from a request-body flag. Strong syscall isolation comes from \texttt{gVisor} or \texttt{Kata} in the Kubernetes manifest, and \texttt{deploy/k8s/eakfd-networkpolicy.yaml} restricts egress. \\
+\addlinespace
+Firecracker microVMs \& \texttt{TPROXY} interception & \textbf{Designed only} & \texttt{cmd/eakfd} states Firecracker is not implemented; no \texttt{TPROXY} code exists. \texttt{docs/EPHEMERAL\_AGENT\_KERNEL\_FIREWALL.md} is labelled an architectural design proposal. \\
+\addlinespace
+Adversarial corpus & Published (22 cases) & 22 cases (19 malicious, 3 benign controls) in \texttt{Sentry\_Gateway/tests/adversarial/corpus.json} executed by \texttt{adversarial\_corpus\_test.go} in CI. The 249-case synthetic load-test stream (199 malicious, 50 benign) is generated by \texttt{tests/k6/sentry\_gateway\_load.js}. \\
+\addlinespace
+Load tests & Published & k6 scripts in \texttt{tests/k6/} and \texttt{Sentry\_Gateway/tests/load/}; results measured on a single development machine and not independently reproduced. \\
+\addlinespace
+Public CI & Passing & GitHub Actions workflow ``Verify \& E2E CI'' passes on \texttt{v1.0.3}: runs \texttt{scripts/count\_tests.sh} (1,299 tests across 104 files), builds all binaries, runs unit and adversarial tests, runs \texttt{govulncheck ./...} (0 vulnerabilities), and runs the 23-check production-path E2E suite against live PostgreSQL~15, Redis~7, Core API, and Gateway. \\
+\end{longtable}
+\end{small}
+
+% =============================================================================
+\section{Empirical Evaluation and Evidence Boundaries}
+\label{sec:evaluation}
+% =============================================================================
+
+\subsection{Reproducible Test Suite Composition (\texttt{scripts/count\_tests.sh})}
+\label{subsec:test-suite}
+
+To ensure that any reader inspecting the open-source repository gets the exact test count reported in this paper without missing-directory ambiguity, the repository includes \texttt{scripts/count\_tests.sh}, which is executed automatically in \texttt{.github/workflows/verify.yml}. Table~\ref{tab:test-suite} lists the exact breakdown across all 104 test files in \texttt{OS-Cicada} \texttt{v1.0.3}.
+
+\begin{table}[htbp]
+\centering
+\caption{Reproducible Test Suite Composition in \texttt{OS-Cicada} \texttt{v1.0.3} (\texttt{bash ./scripts/count\_tests.sh})}
+\label{tab:test-suite}
+\begin{small}
+\begin{tabular}{@{} l l r r p{5.8cm} @{}}
+\toprule
+\textbf{Language} & \textbf{Component Directory} & \textbf{Files} & \textbf{Tests} & \textbf{Command in \texttt{scripts/count\_tests.sh}} \\
+\midrule
+Go (Gateway)   & \texttt{Sentry\_Gateway} (42 test pkg dirs)              & 65 & \textbf{760} & \texttt{grep -rn "\^{}func Test" Sentry\_Gateway --include="*\_test.go" | wc -l} \\
+Go (Companion) & \texttt{Shadow\_Sandbox}, \texttt{Mesh\_Directory}, \texttt{Licensing\_Authority} & 4 & \textbf{50} & \texttt{grep -rn "\^{}func Test" Shadow\_Sandbox Mesh\_Directory Licensing\_Authority --include="*\_test.go" | wc -l} \\
+PHP            & \texttt{Core\_API/tests} (feature \& unit tests)         & 9  & \textbf{82}  & \texttt{grep -rn "public function test" Core\_API/tests --include="*Test.php" | wc -l} \\
+Python         & \texttt{Cicada\_SDK/python/tests} (107), \texttt{Verification\_Swarm} (39), \texttt{Saga\_Executor} (28) & 8 & \textbf{174} & \texttt{grep -rn -E "\^{}[[:space:]]*(async[[:space:]]+)?def test\_" Cicada\_SDK/python/tests Verification\_Swarm Saga\_Executor --include="*.py" | wc -l} \\
+TypeScript/JS  & \texttt{Developer\_Portal/src} (63), \texttt{dashboard/src} (86), \texttt{Cicada\_SDK/node/src} (30) & 14 & \textbf{179} & \texttt{grep -rn -E "\textbackslash b(it|test)\textbackslash(" Developer\_Portal/src dashboard/src Cicada\_SDK/node/src --include="*.test.ts*" | wc -l} \\
+Dart/Flutter   & \texttt{Ciba\_Flutter\_App/test} (42 \texttt{test} + 12 \texttt{testWidgets}) & 4 & \textbf{54} & \texttt{grep -rn -E "\textbackslash b(test|testWidgets)\textbackslash(" Ciba\_Flutter\_App/test --include="*\_test.dart" | wc -l} \\
+\midrule
+\textbf{Total} & \textbf{All Open-Source Test Files (46 Go test pkgs + PHP + Py + TS + Dart)} & \textbf{104} & \textbf{1,299} & \texttt{bash ./scripts/count\_tests.sh} \\
+\midrule
+Go Subtests    & Table-driven \texttt{t.Run} (40) + 22-case \texttt{corpus.json} & — & +62 & \texttt{grep -rn "t\textbackslash.Run(" Sentry\_Gateway --include="*\_test.go" | wc -l} \\
+Go Benchmarks  & \texttt{Sentry\_Gateway} (\texttt{func Benchmark*})      & —  & 15  & \texttt{grep -rn "\^{}func Benchmark" Sentry\_Gateway --include="*\_test.go" | wc -l} \\
+Shell E2E      & \texttt{scripts/e2e\_production.sh} (13 core + 10 admin/canary) & 1 & \textbf{23 checks} & \texttt{GATEWAY\_SECRET=ci-gateway-secret bash ./scripts/e2e\_production.sh} \\
+\bottomrule
+\end{tabular}
+\end{small}
+\end{table}
+
+\subsection{Per-Layer Micro-Benchmarks and Single-Machine Load Results}
+\label{subsec:benchmarks}
+
+Table~\ref{tab:microbench} reports the isolated computational overhead of Layer~1 and Layer~2 on a single development machine (Quad-Core Intel Core i5 at 3.8\,GHz, 40\,GB RAM, co-located PostgreSQL~14.17 and Redis~7.2.6). Typical $\sim$120-byte messages complete in-process filtering in under 0.25\,ms (0.190\,ms for Layer~1 injection scanning; 0.006\,ms for Layer~2 lexical/Jaccard scoring), whereas a 1\,KB payload requires 1.530\,ms in the multi-pass deobfuscator and regex engine (bounded at 64\,KB maximum deobfuscation input and 8\,KB per Base64 candidate).
+
+\begin{table}[htbp]
+\centering
+\caption{Isolated Per-Layer Micro-Benchmark Latency (\texttt{Sentry\_Gateway})}
+\label{tab:microbench}
+\begin{tabular}{@{} l l r @{}}
+\toprule
+\textbf{Pipeline Layer} & \textbf{Payload / Operation} & \textbf{Latency (ms)} \\
+\midrule
+Layer 1 (\texttt{injection\_scan}) & Clean message ($\sim$120 bytes, 7-stage deobfuscation + 36 regexes) & 0.190 \\
+Layer 1 (\texttt{injection\_scan}) & Clean HTML snippet ($\sim$250 bytes, DOM/CSS scan)                  & 0.014 \\
+Layer 1 (\texttt{injection\_scan}) & Larger payload (1\,KB multi-encoding + regex scan; 64\,KB cap)       & 1.530 \\
+Layer 2 (\texttt{semantic\_intent}) & In-process lexical taxonomy + Jaccard scoring                      & 0.006 \\
+\midrule
+\textbf{Total (typical 120\,B payload)} & Standard small agent action payload                            & $<$\,0.250 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The repository ships two k6 load-test suites: (1)~the single-run sustained proxy suite (\texttt{Sentry\_Gateway/tests/load/proxy\_load.js}, 7,472 requests), which achieves \textbf{p50 = 6.24\,ms}, \textbf{p95 = 19.01\,ms}, and \textbf{p99 = 50.94\,ms} (vs.\ 2,510.0\,ms single-run pre-optimisation p99, a $49\times$ reduction) with $0.00\%$ failed requests; and (2)~the 5-run aggregate mixed-attack suite (\texttt{tests/k6/sentry\_gateway\_load.js}, 150\,req/sec peak, $N=5$ runs), where replacing 6--8 synchronous PostgreSQL queries per request with a \texttt{singleflight}-protected Redis read-through cache (\texttt{internal/agentcache}, 60\,s TTL) reduced p95 latency from 1,610\,ms to \textbf{19.0\,ms} (5.0\,ms p50, 10.0\,ms p90, \textbf{62.0\,ms} p99 vs.\ 5,003.0\,ms uncached 5-run p99, an $81\times$ reduction).
+
+\subsection{Confusion Matrices and Evidentiary Boundaries}
+\label{subsec:evidence-boundaries}
+
+In the 249-request mixed k6 injection scenario (\texttt{sentry\_gateway\_load.js}), 199 requests ($79.9\%$) were malicious injection payloads and 50 requests ($20.1\%$) were benign baseline controls, yielding $\text{TP}=199, \text{TN}=50, \text{FP}=0, \text{FN}=0$ ($100.0\%$ TPR, $0.0\%$ FPR). Likewise, the 22-case CI regression corpus (\texttt{tests/adversarial/corpus.json}) comprises 19 malicious payloads and 3 benign controls (\texttt{BENIGN-001}--\texttt{003}), yielding $\text{TP}=19, \text{TN}=3, \text{FP}=0, \text{FN}=0$. Table~\ref{tab:evidence-support} states explicitly what the empirical results prove and what they do not prove.
+
+\begin{table}[htbp]
+\centering
+\caption{What the Empirical Evaluation Supports vs.\ What It Does Not Show}
+\label{tab:evidence-support}
+\begin{small}
+\begin{tabular}{@{} p{3.8cm} p{5.5cm} p{5.8cm} @{}}
+\toprule
+\textbf{Evidence} & \textbf{What It Shows} & \textbf{What It Does Not Show} \\
+\midrule
+1,299 automated tests + 23 live E2E checks (\texttt{count\_tests.sh}) & The code executes its intended logic and enforces policy, prerequisites, tool scope, taint, and CIBA hash/\texttt{TraceID} binding on tested inputs. & Resistance to novel attack vectors or logic flaws nobody wrote a test for. \\
+\addlinespace
+FGA result of 100\% (244/244 in load test) & The authorisation policy is applied deterministically as written under load, because the check is a policy lookup. & Statistical detection capability against novel attacks. \\
+\addlinespace
+Static confusion matrices ($\text{TP}=19, \text{TN}=3$ in \texttt{corpus.json}; $\text{TP}=199, \text{TN}=50$ in k6 load test) & A deterministic regression baseline on a fixed, author-written corpus with zero false positives on the included benign controls. & Resilience against adaptive attackers. As shown in \emph{``The Attacker Moves Second''}~\cite{nasr2025}, static regex and classifier defences are routinely bypassed by adaptive human red-teamers. \\
+\addlinespace
+Load results (p95 1,610\,ms to 19\,ms at 150\,req/sec) & A database connection-pool bottleneck caused by 6--8 queries per request was removed with a Redis cache on one development machine. & Production multi-node scale. Removing per-request uncached database queries is a practical systems-engineering fix, not a novel research result. \\
+\bottomrule
+\end{tabular}
+\end{small}
+\end{table}
+
+% =============================================================================
+\section{Known Limitations and Regulatory Relevance}
+\label{sec:limitations}
+% =============================================================================
+
+\subsection{Twelve Known Limitations}
+\label{subsec:known-limitations}
+
+The architecture limits the damage a compromised or hallucinating agent can do; it does not prevent compromise, and it cannot recognise every malicious action:
+
+\begin{enumerate}[label=\arabic*., leftmargin=2em]
+    \item \textbf{No independent security review.} No third party has run an adaptive red-team evaluation against the gateway (\texttt{RELEASE\_SCOPE.md}). Published research shows classifier-based defences fall to adaptive attackers~\cite{nasr2025}; the deterministic tool-scope, prerequisite, session-taint, and CIBA approval layers are the components designed to hold up under compromise.
+    \item \textbf{Bypassing the explicit proxy.} The gateway is an explicit HTTP/MCP proxy. A compromised agent OS process can call external services directly unless network controls force traffic through the gateway. The repository ships a Kubernetes \texttt{NetworkPolicy} (\texttt{deploy/k8s/eakfd-networkpolicy.yaml}) for both the sandbox and managed agents, which depends on the deployer's CNI enforcement.
+    \item \textbf{Agents with no registered tool manifest.} By default, an agent with zero rows in \texttt{agent\_tools} skips Layers~5 (\texttt{prerequisite}) and~6 (\texttt{tool\_scope}). Deployers should register tool manifests for every agent and enable \texttt{CICADA\_REQUIRE\_TOOL\_MANIFEST=true} to fail closed.
+    \item \textbf{Remaining fail-open paths (Table~\ref{tab:fail-modes}).} Without Redis, velocity checks fail open when development or simulation mode is set. The drift check skips cold-start agents with no history. The optional SLM classifier times out at 50\,ms and never blocks. The semantic layer falls back to word overlap when the embedding service is down.
+    \item \textbf{Client-controlled metadata headers and unhashed \texttt{Content-Type}.} The tool ID, skill, session ID, and action summary headers are set by the calling agent/SDK. While tool ID is verified against the server-side manifest, sandbox routing is decided server-side, and \texttt{Authorization}/\texttt{X-Cicada-*} headers are stripped on forward, an agent can still send a misleading action summary header, and \texttt{Content-Type} is not currently included inside \texttt{PayloadHash}.
+    \item \textbf{Business-aligned manipulation.} A malicious instruction phrased in ordinary business language contains no jailbreak signature and passes Layer~1. Session taint (Layer~9), transaction profiling (Layer~8), and human approval (Stage~14) limit the damage; they do not detect the linguistic manipulation itself.
+    \item \textbf{Single-signal approvals in Tiered HITL.} A lone risk signal scoring 0.30 or 0.40 against the 0.60 Tier-2 threshold is auto-approved by default (while recording \texttt{[HITL-SHADOW]} telemetry) unless another layer escalates or the operator sets \texttt{HITL\_SINGLE\_SIGNAL\_MODE=enforce}.
+    \item \textbf{Human approval volume under session taint.} Taint set on external requests returning response bodies from domains outside \texttt{CICADA\_TRUSTED\_DOMAINS} may escalate many subsequent write requests to a human operator. Operators must tune domain allowlists and \texttt{X-Cicada-Session-ID} scoping if approval volume is high.
+    \item \textbf{Sandbox isolation is deployment-supplied.} The \texttt{eakfd} daemon runs subprocesses with output secret scrubbing; strong kernel isolation comes from \texttt{gVisor} or \texttt{Kata} in the Kubernetes manifest. The name ``kernel firewall'' describes the target design, and \textbf{Firecracker microVMs and \texttt{TPROXY} interception are not implemented}.
+    \item \textbf{Historical document count differences.} Earlier audit snapshots in \texttt{docs/Security\_Audit\_Test\_Results.md} (marked with a historical banner) reflect Iteration~31 point-in-time test counts prior to \texttt{v1.0.3}; Table~\ref{tab:test-suite} and \texttt{bash ./scripts/count\_tests.sh} provide the authoritative counts.
+    \item \textbf{Trusted infrastructure and external ledger anchoring.} The threat model assumes PostgreSQL, Redis, and the container host nodes are uncompromised. While Stage~15's SHA-256 hash-chained ledger detects naive row edits, high-assurance deployments should periodically anchor the ledger head $H_{\text{head}}$ to an external WORM store or transparency log to prevent full-chain recomputation by a root host attacker.
+    \item \textbf{Streaming responses, shadow quarantine scope, and mobile push credentials.} Streaming SSE LLM responses are not full-body output-inspected by Stage~15 DLP, quarantining a discovered shadow agent updates its database governance status rather than killing an external OS process, and live mobile push/attestation requires operator FCM/APNs and Apple/Google store credentials.
+\end{enumerate}
+
+\subsection{EU Artificial Intelligence Act Relevance (Regulation (EU) 2024/1689 \& 2026/1744)}
+\label{subsec:eu-ai-act}
+
+Following the European Union's Digital Omnibus on AI amendment (\textbf{Regulation (EU) 2026/1744}), high-risk obligations under Regulation (EU) 2024/1689~\cite{euaiact2024} for Annex~III systems apply from \textbf{2~December 2027} (and from \textbf{2~August 2028} for Annex~I product-embedded systems). The mapping between the gateway's layers and Articles~9--15 (provider obligations: risk management in Layers~1--9, automatic hash-chained logging in Stage~15, and human oversight in Stage~14 CIBA) as well as \textbf{Article~26} (deployer obligations: assigning qualified human oversight personnel, monitoring input relevance, and retaining logs for at least six months) illustrates \textbf{technical relevance and architectural support for provider and deployer compliance engineering}, not formal legal conformity assessment.
+
+% =============================================================================
+\section{Conclusion}
+\label{sec:conclusion}
+% =============================================================================
+
+We have presented Version~3 of our path-dependent runtime governance architecture for autonomous AI agents, aligned directly with the open-source reference implementation at release \texttt{v1.0.3} (\url{https://github.com/affinity-ops/OS-Cicada}). By separating deterministic path-dependent controls (server-side tool scoping, forward-saga prerequisites, CaMeL-style session taint escalation across all untrusted responses, and payload-hash-bound, IP-pinned CIBA human approval) from heuristic input classifiers, and by verifying all 1,299 top-level test definitions and 23 production E2E checks in public CI, this release provides a transparent, reproducible foundation for runtime AI agent governance research and engineering.
+
+% =============================================================================
+\begin{thebibliography}{99}
+
+\bibitem{matthewsv2}
+P.~Matthews.
+\newblock A Path-Dependent, Multi-Layered Architecture for Runtime Governance and Post-Quantum Cryptographic Assurance of Autonomous AI Agents (Version 2).
+\newblock SSRN Preprint~6612798 (\url{https://papers.ssrn.com/sol3/papers.cfm?abstract_id=6612798}), June 2026.
+
+\bibitem{mef2026}
+P.~Matthews.
+\newblock The Matthews Enforcement Framework: A Prospective, Path-Dependent Architecture for Runtime AI Agent Governance.
+\newblock Published in-repository at \texttt{docs/MATTHEWS\_ENFORCEMENT\_FRAMEWORK.md} in \url{https://github.com/affinity-ops/OS-Cicada}, June 2026.
+
+\bibitem{owasp_agentic2025}
+OWASP Foundation.
+\newblock OWASP Top 10 for Agentic Applications (ASI01--ASI10).
+\newblock \url{https://genai.owasp.org/}, December 2025.
+
+\bibitem{nist_agent2026}
+National Institute of Standards and Technology.
+\newblock NIST AI Agent Standards Initiative (CAISI): Runtime Governance, Identity, and Attribution Guidelines.
+\newblock U.S. Department of Commerce, 17~February 2026.
+
+\bibitem{nist}
+National Institute of Standards and Technology.
+\newblock Artificial Intelligence Risk Management Framework (AI RMF 1.0).
+\newblock NIST AI 100-1, 2023.
+
+\bibitem{nasr2025}
+M.~Nasr, N.~Carlini, C.~Sitawarin, et al.
+\newblock The Attacker Moves Second: Stronger Adaptive Attacks Bypass Defenses Against LLM Jailbreaks and Prompt Injections.
+\newblock OpenAI, Anthropic, and Google DeepMind Technical Report, 2025.
+
+\bibitem{camel2025}
+E.~Debenedetti, I.~Shumailov, T.~Fan, et al.
+\newblock Defending LLM Agents against Prompt Injection with CaMeL.
+\newblock \textit{arXiv preprint}, arXiv:2503.18813, 2025.
+
+\bibitem{meta_ruleoftwo2025}
+Meta AI Security.
+\newblock The Agents Rule of Two: Bounding Autonomous Agent Risk Across Untrusted Inputs, Sensitive Access, and External State Mutation.
+\newblock Technical Report, 2025.
+
+\bibitem{kaptein2026}
+M.~Kaptein, V.-J.~Khan, and A.~Podstavnychy.
+\newblock Runtime governance for AI agents: Policies on paths.
+\newblock \textit{arXiv preprint}, arXiv:2603.16586, March 2026.
+
+\bibitem{mazzocchetti2026}
+A.~M.~Mazzocchetti.
+\newblock Cryptographic runtime governance for autonomous AI systems.
+\newblock SSRN, DOI:~10.2139/ssrn.6418638, 2026.
+
+\bibitem{derudder2026}
+J.~DeRudder.
+\newblock Computable Trust Architecture: A Formal Framework for Runtime AI Governance.
+\newblock SSRN, DOI:~10.2139/ssrn.6583738, 2026.
+
+\bibitem{emerson2026}
+H.~Emerson.
+\newblock THEMIS-xAI: A Unified Architecture for Explainable AI Governance.
+\newblock SSRN, DOI:~10.2139/ssrn.6390878, 2026.
+
+\bibitem{marin2026}
+G.~Mar\'{i}n and J.~Chaudhary.
+\newblock Governing What You Cannot Observe: Adaptive Runtime Governance.
+\newblock \textit{arXiv preprint}, arXiv:2604.24686, 2026.
+
+\bibitem{sawaf2026}
+K.~Sawaf.
+\newblock The Discrete Judgment Intermediate: An Externalization Infrastructure for AI Governance.
+\newblock University of Edinburgh Preprint, 2026.
+
+\bibitem{euaiact2024}
+European Parliament and Council of the European Union.
+\newblock Regulation (EU) 2024/1689 (Artificial Intelligence Act) as amended by Regulation (EU) 2026/1744 (Digital Omnibus on AI; Annex~III obligations effective 2~December 2027, Annex~I effective 2~August 2028).
+\newblock \textit{Official Journal of the European Union}, 2024--2026.
+
+\bibitem{fips204}
+National Institute of Standards and Technology.
+\newblock FIPS 204: Module-Lattice-Based Digital Signature Standard (ML-DSA).
+\newblock Federal Information Processing Standards Publication, August 2024.
+
+\bibitem{ciba}
+OpenID Foundation and IETF OAuth Working Group.
+\newblock OpenID Connect Client-Initiated Backchannel Authentication Flow (CIBA) Core 1.0 (2021); RFC~8693: OAuth 2.0 Token Exchange (2020); and IETF Draft \texttt{draft-ietf-oauth-identity-assertion-authz-grant} (ID-JAG, 2025).
+
+\end{thebibliography}
+
+\vfill
+\begin{center}
+\small\textit{\textcopyright\ 2026 Patrick Matthews (ASAI --- affinitysmartai.co.uk). Licensed under CC BY 4.0 / Apache-2.0.}
+\end{center}
+
+\end{document}

@@ -1,6 +1,6 @@
 cff-version: 1.2.0
-title: "Cicada: Zero-Trust Runtime Enforcement Gateway & Kernel Firewall for Autonomous AI Agents"
-message: "If you use Cicada in your research or engineering work, please cite both the software and the Matthews Execution Framework (MEF) paper."
+title: "Cicada: Zero-Trust Runtime Enforcement Gateway & EAKF Execution Sandbox for Autonomous AI Agents"
+message: "If you use Cicada in your research or engineering work, please cite both the software and the Matthews Enforcement Framework (MEF) paper."
 type: software
 authors:
   - given-names: Patrick
@@ -8,11 +8,10 @@ authors:
     affiliation: "Affinity Ops (Affinity Smart AI)"
     orcid: "https://orcid.org/0009-0000-2353-143X"
 repository-code: "https://github.com/affinity-ops/OS-Cicada"
-url: "https://doi.org/10.5281/zenodo.19597120"
-doi: "10.5281/zenodo.19597120"
+url: "https://github.com/affinity-ops/OS-Cicada"
 license: Apache-2.0
-version: "1.0.2"
-date-released: "2026-04-16"
+version: "1.0.3"
+date-released: "2026-11-07"
 keywords:
   - ai-agents
   - zero-trust
@@ -24,15 +23,12 @@ keywords:
   - runtime-security
 preferred-citation:
   type: article
-  title: "The Matthews Execution Framework (MEF)"
+  title: "A Path-Dependent, Multi-Layered Architecture for Runtime Governance and Post-Quantum Cryptographic Assurance of Autonomous AI Agents"
   authors:
     - given-names: Patrick
       family-names: Matthews
       affiliation: "Affinity Ops (Affinity Smart AI)"
       orcid: "https://orcid.org/0009-0000-2353-143X"
-  doi: "10.5281/zenodo.19597120"
-  url: "https://doi.org/10.5281/zenodo.19597120"
+  url: "https://github.com/affinity-ops/OS-Cicada/blob/main/docs/PATH_DEPENDENT_ARCHITECTURE_v3.md"
   year: 2026
-  month: 6
-  publisher:
-    name: Zenodo
+  month: 11

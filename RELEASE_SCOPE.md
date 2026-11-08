@@ -6,31 +6,28 @@ This document provides an engineering breakdown of what is **implemented and tes
 
 ## 1. Reconciliation: 15-Stage Gateway Lifecycle vs. 9-Layer Admission Pipeline
 
-The documentation and codebase refer to two complementary numbers that operate at different scopes:
+The documentation and codebase refer to two complementary numbers that operate at different scopes (matching Table 2 of [`docs/PATH_DEPENDENT_ARCHITECTURE_v3.md`](./docs/PATH_DEPENDENT_ARCHITECTURE_v3.md) stage-for-stage):
 
 1. **The 15-Stage Gateway Lifecycle (`Sentry_Gateway/cmd/sentry/main.go`):**
    Covers the complete end-to-end HTTP request/response lifecycle across the proxy data plane:
    - **Pre-Admission Perimeter (Stages 1 – 4):**
-     1. Cryptographic Admission (Ed25519 EVAR / 15-minute JIT Session JWT + RFC 9449 DPoP proof + RFC 8693 ID-JAG human context)
-     2. Certification & Data Residency Gate (`certified` / `pending_review` provisional mode / region pinning)
-     3. Tier-1 SSRF & DNS-Rebinding Guard (`internal/ssrf`, HTTPS enforcement, RFC 1918 & `169.254.169.254` IMDSv2 block)
-     4. ASI07 Inter-Agent Cryptographic Hop Chain (`internal/chain`) & Skill JSON Schema Contract (`internal/agentcache/schema_validator.go`)
-     5. Lock-Free P2P Gossip Quarantine Check (`internal/gossip`, `sync/atomic.Pointer` `O(1)` lookup)
-     6. Ghost Mode Deception Router (`internal/ghostmode`, diverts flagged agents to `Shadow_Sandbox`)
-     7. Multi-Encoding Canary Honeytoken Trap (`internal/canary`, raw/Base64/Hex/URL/SHA-256 `CICADA_CANARY_*` detection + instant mesh quarantine)
-     8. Fine-Grained Resource Policy (`internal/fga`, URL glob & HTTP method allowlist)
-   - **Unified 9-Layer Deterministic Admission Pipeline (`internal/pipeline/pipeline.go`):**
-     9. **Layer 1 (`injection_scan`):** 7-stage recursive deobfuscation (`NFKC`, URL, HTML entities, Hex/Unicode, Base64) + 36 regex patterns + hidden CSS/HTML DOM scanner (`internal/injection`)
-     10. **Layer 2 (`semantic_intent`):** Deterministic lexical taxonomy & read-vs-mutation verb contradiction engine (`internal/semantic`)
-     11. **Layer 3 (`velocity`):** Redis sliding-window & impact-weighted circuit breaker (`internal/velocity`)
-     12. **Layer 4 (`drift_guard`):** Non-self-poisoning sliding-window cosine similarity context shift detector (`internal/drift`)
-     13. **Layer 5 (`prerequisite`):** Fail-closed Forward-Saga prerequisite verification (`internal/prerequisite`)
-     14. **Layer 6 (`tool_scope`):** Server-side tool manifest & parameter constraint enforcement (`internal/toolscope`, `internal/agentcache`)
-     15. **Layer 7 (`blast_radius`):** Destructive SQL (`WHERE 1=1`, `DROP`, `TRUNCATE`), bulk record cap estimator (`internal/blastradius`), and destructive-action classification (`internal/hitl.ClassifyDestructiveAction` — including non-DELETE verbs such as `lifecycle_policy`, `suspend_backup`, `delete_snapshot`)
-     16. **Layer 8 (`tx_profile`):** Multivariate Z-score financial anomaly profiler & deontic rule evaluator (`internal/txprofile`)
-     17. **Layer 9 (`camel_taint`):** CaMeL-style session taint tracking & Rule-of-Two capability revocation (`internal/taint`)
-   - **Post-Admission Execution & Egress/Ingress Auditing:**
-     - In-Memory OPA Rego evaluation (`internal/policy`), Tiered HITL & length-prefixed SHA-256 CIBA biometric sign-off (`internal/hitl`, `internal/ciba`), EAKF code sandbox interception (`internal/plugin`, `cmd/eakfd`), Vault-aware & Shannon entropy outbound DLP (`internal/output`), ASI08 cascade detection (`internal/cascade`), BYOK KMS key injection (`internal/auth`), inbound response / reasoning trace scanning (`internal/llmproxy`), and SHA-256 hash-chained SQLite Edge Ledger persistence (`internal/ledger`).
+     1. **Stage 1 (Cryptographic Identity, Certification & Residency Gate):** Ed25519 (`EdDSA`) EVAR / 5-minute JIT Session JWT + RFC 9449 DPoP proof + IETF draft ID-JAG (`draft-ietf-oauth-identity-assertion-authz-grant`) via RFC 8693 Token Exchange + certification state (`certified` / `pending_review` provisional mode) + regional data residency pinning (`internal/auth`, `internal/session`).
+     2. **Stage 2 (Tier-1 SSRF & DNS-Rebinding Guard):** HTTPS enforcement, RFC 1918, loopback, CGNAT, IPv6 ULA, and `169.254.169.254` IMDSv2 block (`internal/ssrf`), paired with connection-time IP pinning in `proxyTransport.DialContext` (`cmd/sentry/main.go`).
+     3. **Stage 3 (ASI07 Inter-Agent Hop Chain & Skill JSON Schema Contract):** Ed25519-signed `X-Cicada-Agent-Chain` delegation verification (`internal/chain`) & declared skill JSON Schema validation (`internal/agentcache/schema_validator.go`).
+     4. **Stage 4 (Gossip Quarantine, Ghost Mode, Canary Trap & FGA Policy):** Lock-free P2P gossip quarantine check (`internal/gossip`, `sync/atomic.Pointer` `O(1)` lookup), Ghost Mode deception diversion (`internal/ghostmode`), multi-encoding Canary honeytoken trap (`internal/canary`, raw/Base64/Hex/URL/SHA-256 `CICADA_CANARY_*`), and Fine-Grained Resource Policy (`internal/fga`, URL glob & HTTP method allowlist).
+   - **Unified 9-Layer Deterministic Admission Pipeline (`internal/pipeline/pipeline.go`, Stages 5 – 13):**
+     5. **Stage 5 — Pipeline Layer 1 (`injection_scan`):** Bounded 7-stage deobfuscation (`NFKC`, zero-width strip, homoglyphs, URL, HTML named/numeric entities, Hex/Unicode, Base64, capped at `MaxDeobfuscationInputBytes = 64 KB`) + 36 regex patterns + hidden CSS/HTML DOM scanner (`internal/injection`) + optional SLM sidecar (`internal/slm`).
+     6. **Stage 6 — Pipeline Layer 2 (`semantic_intent`):** Embedding cosine similarity (`0.35` default threshold) or deterministic lexical taxonomy & Jaccard fallback (`0.10` default threshold) + read-vs-mutation verb contradiction engine (`internal/semantic`).
+     7. **Stage 7 — Pipeline Layer 3 (`velocity`):** Redis sliding-window & impact-weighted $3.0\sigma$ z-score circuit breaker (`internal/velocity`).
+     8. **Stage 8 — Pipeline Layer 4 (`drift_guard`):** Non-self-poisoning sliding-window cosine similarity context shift detector (`internal/drift`).
+     9. **Stage 9 — Pipeline Layer 5 (`prerequisite`):** Fail-closed Forward-Saga prerequisite verification recorded only after upstream `2xx`/`3xx` completion (`internal/prerequisite`).
+     10. **Stage 10 — Pipeline Layer 6 (`tool_scope`):** Server-side tool manifest & parameter constraint enforcement (`internal/toolscope`, `internal/agentcache`).
+     11. **Stage 11 — Pipeline Layer 7 (`blast_radius`):** Destructive SQL (`WHERE 1=1`, `DROP`, `TRUNCATE`), bulk record cap estimator (`internal/blastradius`), and 33-pattern destructive-action classifier (`internal/hitl.ClassifyDestructiveAction`, including non-`DELETE` lifecycle/backup/snapshot mutations).
+     12. **Stage 12 — Pipeline Layer 8 (`tx_profile`):** Multivariate Z-score financial anomaly profiler & deontic rule evaluator (`internal/txprofile`).
+     13. **Stage 13 — Pipeline Layer 9 (`camel_taint`):** CaMeL-style session taint tracking & Meta Rule-of-Two capability revocation (`internal/taint`).
+   - **Post-Admission Execution & Egress/Ingress Auditing (Stages 14 – 15):**
+     14. **Stage 14 (OPA Rego, CIBA Payload-Bound Approval & EAKF Sandbox):** In-memory OPA Rego evaluation (`internal/policy`), Tiered HITL & decimal-length-prefixed SHA-256 CIBA biometric sign-off (`internal/hitl`, `internal/ciba`), EAKF code sandbox interception (`internal/plugin`, `cmd/eakfd`), and BYOK KMS key injection (`internal/auth`).
+     15. **Stage 15 (Outbound DLP, ASI08 Cascade, Response Tainting & Hash-Chained Ledger):** Vault-aware & Shannon entropy outbound DLP (`internal/output`), ASI08 cascade detection (`internal/cascade`), untrusted external response tainting (`internal/taint`), inbound LLM response / reasoning trace scanning (`internal/llmproxy`), and SHA-256 hash-chained SQLite Edge Ledger persistence (`internal/ledger`).
 
 ---
 
@@ -132,20 +129,20 @@ Your code is affected by 0 vulnerabilities.
 
 ## 5. Production-Path Verification (2026-11-07)
 
-First end-to-end run of the real request path (simulation off) against PostgreSQL 15, Redis and the Core API, with `CICADA_INTERNAL_KEY` set. `scripts/e2e_production.sh`: **19/19 checks passed**.
+End-to-end run of the real request path (simulation off) against PostgreSQL 15, Redis 7, and the Core API, with `CICADA_INTERNAL_KEY` (`GATEWAY_SECRET`) set. `scripts/e2e_production.sh`: **23/23 checks passed** (13 core admission/session/proxy checks + 10 `GATEWAY_SECRET`-gated admin and canary issue/revoke checks). To reproduce the full repository test count (**1,299** top-level test definitions across 104 test files in Go, PHP, Python, TS/JS, and Dart), run `bash scripts/count_tests.sh`.
 
 | Check | Result |
 | :--- | :--- |
-| Health: gateway's own Postgres pool, Redis, Core API | pass |
-| Provisioned agent registers and receives an EVAR | pass (201) |
-| Unknown agent refused | pass (404) |
-| Agent requesting unprovisioned scopes refused | pass (403) |
-| Registration without `X-Gateway-Secret` refused | pass (401) |
-| EVAR exchanged for a JIT session token | pass (200) |
-| Benign proxied request admitted | pass (200) |
-| Prompt injection / SSRF to metadata / credential exfiltration | pass (403 each) |
-| Request without credentials | pass (401) |
-| Anonymous calls to 6 admin routes (federation, devices, rotate, shadow, test-push, sandbox report) | pass (401 each) |
+| Health: gateway HTTP 200 + Postgres pool connected (2 checks) | pass |
+| Provisioned agent registers (201) and receives an EVAR (2 checks) | pass |
+| Unknown agent refused (1 check) | pass (404) |
+| Agent requesting unprovisioned scopes refused (1 check) | pass (403) |
+| EVAR exchanged for a JIT session token (2 checks) | pass (200) |
+| Benign proxied request admitted (1 check) | pass (200) |
+| Prompt injection / SSRF to metadata / credential exfiltration blocked (3 checks) | pass (403 each) |
+| Request without credentials refused (1 check) | pass (401) |
+| Anonymous calls to 7 admin routes (`federation`, `devices`, `rotate`, `shadow`, `test-push`, `sandbox/report`, `admin/canary/issue`) (7 checks) | pass (401 each) |
+| Authenticated canary honeytoken issue (201 + token non-empty) and revoke (200) (3 checks) | pass |
 
 Header spoofing (`X-Real-IP`) and gossip authentication cannot be tested from localhost; they are covered by `TestTrustedRealIP` and `TestAuthenticateBatch`.
 

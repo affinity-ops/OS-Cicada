@@ -3110,10 +3110,11 @@ func handleAgentRequest(w http.ResponseWriter, r *http.Request) {
 		}
 		go recordAgentTxSuccess(context.Background(), agentID, pipeRes.TxFeatures)
 	}
-	// CaMeL taint propagation: reading from an untrusted external domain via GET
-	// or carrying untrusted provenance marks the agent session tainted so
-	// subsequent state mutations require CIBA. Trusted internal domains do not taint.
-	if (r.Method == http.MethodGet && taint.ShouldTaintOnRead(targetURL, provenanceHdr)) || taint.IsUntrustedProvenance(provenanceHdr) {
+	// CaMeL taint propagation: ingesting a response from an untrusted external
+	// domain (whether via GET or a non-empty response body on POST/PUT/etc.) or
+	// carrying untrusted provenance marks the agent session tainted so subsequent
+	// state mutations require CIBA. Trusted internal domains do not taint.
+	if ((r.Method == http.MethodGet || len(respBody) > 0) && taint.ShouldTaintOnRead(targetURL, provenanceHdr)) || taint.IsUntrustedProvenance(provenanceHdr) {
 		taint.MarkTainted(r.Context(), taintScopeKey, "proxy:"+r.Method+":"+targetURL, "ingested untrusted external API response")
 	}
 
@@ -4696,7 +4697,7 @@ func handleSimulatedRequest(w http.ResponseWriter, r *http.Request) {
 		simActionClass = resolvedToolID
 		prerequisite.RecordCompletedTool(r.Context(), agentID, resolvedToolID)
 	}
-	if (r.Method == http.MethodGet && taint.ShouldTaintOnRead(targetURL, provenance)) || taint.IsUntrustedProvenance(provenance) {
+	if taint.ShouldTaintOnRead(targetURL, provenance) || taint.IsUntrustedProvenance(provenance) {
 		taint.MarkTainted(r.Context(), taintScopeKey, "sim_proxy:"+r.Method+":"+targetURL, "simulated external response ingestion")
 	}
 	if edgeLedger != nil {

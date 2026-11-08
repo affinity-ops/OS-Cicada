@@ -17,9 +17,9 @@ other locations where third-party notices normally appear:
    (Affinity Ops / Affinity Smart AI)."
 
 Academic & Prior-Art Reference (Informational):
-  Matthews, P. (June 2026). The Matthews Enforcement Framework (MEF): A Deterministic
-  Mathematical Model for Zero-Trust Autonomous Agent Governance.
-  - Zenodo DOI: https://doi.org/10.5281/zenodo.19597120
+  Matthews, P. (2026). The Matthews Enforcement Framework (MEF) & Path-Dependent
+  Architecture for Runtime Governance of Autonomous AI Agents (Version 3).
+  - Repository Paper: /docs/PATH_DEPENDENT_ARCHITECTURE_v3.md
   - SSRN ID: https://papers.ssrn.com/sol3/papers.cfm?abstract_id=6612798
   - Technical Specification: /docs/MATTHEWS_ENFORCEMENT_FRAMEWORK.md
 

@@ -3,11 +3,11 @@
 [![Verify & E2E CI](https://github.com/affinity-ops/OS-Cicada/actions/workflows/verify.yml/badge.svg)](https://github.com/affinity-ops/OS-Cicada/actions/workflows/verify.yml)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](./LICENSE)
 [![Go 1.26+](https://img.shields.io/badge/Go-1.26+-00ADD8.svg)](./Sentry_Gateway)
-[![Zenodo DOI](https://img.shields.io/badge/DOI-10.5281%2Fzenodo.19597120-orange.svg)](https://doi.org/10.5281/zenodo.19597120)
+[![Architecture Paper v3](https://img.shields.io/badge/Paper_v3-Path--Dependent_Architecture-orange.svg)](./docs/PATH_DEPENDENT_ARCHITECTURE_v3.md)
 [![OWASP Agentic Top 10](https://img.shields.io/badge/OWASP_Agentic_AI-ASI01--ASI10-emerald.svg)](./docs/ARCHITECTURE_DEEP_DIVE.md)
 [![Latency p95](https://img.shields.io/badge/p95_Latency-19ms-brightgreen.svg)](#performance-benchmarks-k6-load-test)
 
-> **Overview & Attribution:** Cicada is a self-hosted, Apache-2.0 runtime enforcement gateway for autonomous AI agents, architected and built over 8 months by systems architect **Patrick Matthews** (Affinity Ops / Affinity Smart AI) based on the **Matthews Enforcement Framework (MEF)** published in June 2026 ([DOI: 10.5281/zenodo.19597120](https://doi.org/10.5281/zenodo.19597120) / [SSRN 6612798](https://papers.ssrn.com/sol3/papers.cfm?abstract_id=6612798)). Rather than relying on slow, probabilistic LLM-judging-LLM prompt wrappers, `Sentry_Gateway` enforces deterministic capability controls at the network perimeter—combining scoped Ed25519/DPoP sessions, OPA Rego policy, **Meta's Agents Rule of Two**, **CaMeL-style session taint tracking**, **server-side tool manifest resolution**, **BYOK vault key injection**, and **SHA-256 payload-bound CIBA human approvals** across a unified 9-layer admission pipeline. The gateway's production request path is verified end to end against PostgreSQL, Redis, and the Core API (`./scripts/e2e_production.sh`) and passes `govulncheck` with zero reachable vulnerabilities (`./scripts/verify_release.sh`). For transparency on scope boundaries, optional dependencies, and unimplemented auxiliary features, see [Scope and Limitations](#scope-and-limitations). Under [Apache 2.0 (§ 4(c)–(d))](./LICENSE) and [NOTICE](./NOTICE), any clone, fork, or derivative work must credit **Patrick Matthews** ([details below](#license-and-attribution)).
+> **Overview & Attribution:** Cicada is a self-hosted, Apache-2.0 runtime enforcement gateway for autonomous AI agents, architected and built over 8 months by systems architect **Patrick Matthews** (Affinity Ops / Affinity Smart AI) based on the **Matthews Enforcement Framework (MEF)** ([Paper v3](./docs/PATH_DEPENDENT_ARCHITECTURE_v3.md) / [SSRN 6612798](https://papers.ssrn.com/sol3/papers.cfm?abstract_id=6612798)). Rather than relying on slow, probabilistic LLM-judging-LLM prompt wrappers, `Sentry_Gateway` enforces deterministic capability controls at the network perimeter—combining scoped Ed25519/DPoP sessions, OPA Rego policy, **Meta's Agents Rule of Two**, **CaMeL-style session taint tracking**, **server-side tool manifest resolution**, **BYOK vault key injection**, and **SHA-256 payload-bound CIBA human approvals** across a unified 9-layer admission pipeline. The gateway's production request path is verified end to end against PostgreSQL, Redis, and the Core API (`./scripts/e2e_production.sh`, 23/23 checks) and passes `govulncheck` with zero reachable vulnerabilities (`./scripts/verify_release.sh`). Reproducible test counts across all 104 test files (1,299 top-level test definitions) can be verified via `./scripts/count_tests.sh`. For transparency on scope boundaries, optional dependencies, and unimplemented auxiliary features, see [Scope and Limitations](#scope-and-limitations) and [`RELEASE_SCOPE.md`](./RELEASE_SCOPE.md). Under [Apache 2.0 (§ 4(c)–(d))](./LICENSE) and [NOTICE](./NOTICE), any clone, fork, or derivative work must credit **Patrick Matthews** ([details below](#license-and-attribution)).
 
 **Check every claim yourself (or inspect the [public GitHub Actions CI run](https://github.com/affinity-ops/OS-Cicada/actions/workflows/verify.yml)):** `./scripts/verify_release.sh` builds the gateway, runs the uncached test suite, the vulnerability scan, and the quickstart attacks below, and prints PASS/FAIL for each; `.github/workflows/verify.yml` runs both `./scripts/verify_release.sh` and `./scripts/e2e_production.sh` (with live PostgreSQL 15 + Redis 7 + Core API) on every push.
 
@@ -138,18 +138,18 @@ Documented clearly so operators and evaluators know exact boundaries before depl
 | Area | Status |
 | :--- | :--- |
 | **Pattern-based detection (prompt injection & destructive-action keywords)** | Heuristic layers (deobfuscation + regex + DOM scan + `hitl.ClassifyDestructiveAction`). They catch known phrasings, encodings, and destructive patterns (`DROP TABLE`, `lifecycle_policy`, `suspend_backup`), but a reworded payload or custom API verb can bypass pattern matching—which is why capability scopes, RBAC, tool manifests, SSRF guards, DLP, and taint rules enforce the hard boundary. |
-| **Tool manifest enforcement (Layers 5 & 6)** | Intentional opt-in per agent: agents with **no** registered tools in `agent_tools` skip Layers 5 (`prerequisite`) and 6 (`tool_scope`) and are governed by coarse RBAC scopes (`proxy:read`, `proxy:write`), FGA URL globs, and OPA policy. Once an agent registers one or more tools, Layers 5 and 6 enforce **fail-closed** resolution (matching explicit `URLPattern` globs first, then canonical path segments) and deny any unmapped tool call. |
-| **CaMeL session taint lifetime (Layer 9)** | Taint state (`internal/taint`) is keyed per `agent_id` (`cicada:taint:{agent_id}` in Redis with in-memory `sync.Map` fallback) and carries a **15-minute sliding TTL** (`DefaultTaintTTL = 15m`, aligned with the 15-minute JIT session token lifetime) unless cleared earlier via operator reset (`taint.ClearTaint`). |
+| **Tool manifest enforcement (Layers 5 & 6)** | By default (`CICADA_REQUIRE_TOOL_MANIFEST` unset/`false`), agents with **no** registered tools in `agent_tools` skip Layers 5 (`prerequisite`) and 6 (`tool_scope`) and are governed by coarse RBAC scopes (`proxy:read`, `proxy:write`), FGA URL globs, and OPA policy. Setting `CICADA_REQUIRE_TOOL_MANIFEST=true` enforces global fail-closed manifest mode (`403 unmapped_tool_manifest`). Once an agent registers one or more tools, Layers 5 and 6 enforce **fail-closed** resolution (matching explicit `URLPattern` globs first, then canonical path segments) and deny any unmapped tool call. |
+| **CaMeL session taint lifetime (Layer 9)** | Taint state (`internal/taint`) is keyed by `agent_id:session_id` when `X-Cicada-Session-ID` is supplied (or `agent_id` otherwise) in Redis with in-memory `sync.Map` fallback, and carries a **15-minute sliding TTL** (`DefaultTaintTTL = 15m`, aligned with the 15-minute JIT session token lifetime) unless cleared earlier via operator reset (`taint.ClearTaint`). Any response body from an untrusted external domain marks the session tainted. |
 | **Bypass protection** | The gateway only protects traffic routed through it. Use `deploy/k8s/eakfd-networkpolicy.yaml` or equivalent egress rules so agents cannot call APIs directly. |
 | **EAKF (`eakfd`) kernel isolation** | `eakfd` runs code in an isolated UNIX-socket subprocess with stripped env, ephemeral temp dir, and `.tfstate`/IP output scrubbing (`cmd/eakfd/main.go`). Kernel syscall interception (`gVisor`/`Kata`) and zero-egress lockdown come from running `eakfd` under a Kubernetes `RuntimeClass` + `deploy/k8s/eakfd-networkpolicy.yaml`. Bare-metal Firecracker microVMs (`docs/EPHEMERAL_AGENT_KERNEL_FIREWALL.md` §7.3) are design-only. |
-| **Post-quantum gossip signatures** | Implemented but opt-in: active only with `CICADA_GOSSIP_PEERS_CONFIG` and an ML-DSA-65 key. Otherwise gossip uses a shared HMAC secret. |
-| **SSO federation (OIDC/SAML role mapping)** | Not functional on a fresh install: its tables (`federation_providers`, `role_mappings`) are not created by the active migrations. |
-| **License tier limits** (max agents, mesh tier) | Not enforced. The license signature is verified, but tier fields are not applied. |
-| **Canary token issuing** | Detection of `CICADA_CANARY_*` works; the gateway does not issue or rotate canary tokens for you. |
+| **Post-quantum signatures (Ed25519 + ML-DSA-65)** | Per-request agent tokens (24h EVARs and 5m JIT session JWTs) use compact 64-byte classical `Ed25519` (`EdDSA`) to avoid 3.3 KB header bloat. Hybrid `Ed25519 + ML-DSA-65` (NIST FIPS 204 via `cloudflare/circl`) is wired at three governance boundaries: mobile CIBA human approvals, P2P gossip quarantine batches (when `CICADA_GOSSIP_PEERS_CONFIG` is configured with a peer ML-DSA-65 key), and platform entitlement / vendor auth envelopes. |
+| **SSO federation (OIDC/SAML role mapping)** | `federation_providers` and `role_mappings` tables are provisioned in `active_migrations/001_isolated_schema.sql` and queried by `internal/federation/federation.go`. |
+| **License tier limits** (max agents, mesh tier) | Enforced outside `CICADA_DEV_MODE=true`: `handleRegisterAgent` checks `licenseEnforcer.GetMaxAgents()` and `/v1/gossip/sync` checks `licenseEnforcer.MeshAllowed()`. |
+| **Canary token issuing** | Operators can issue and revoke persisted canary tokens via `POST /v1/admin/canary/issue` and `POST /v1/admin/canary/revoke` (`internal/canary/store.go`), and Gate 6b detects `CICADA_CANARY_*` across raw, Base64, Hex, URL, and SHA-256 encodings. |
 | **Presidio NER for PII** | Optional external service, not bundled. Without it, PII detection is regex-only. |
-| **Full UI fleet** (`start_fleet.sh`) | Requires `composer install` and `npm install && npm run build` in each UI app first; the script checks and tells you what is missing. The dashboards have not been tested end to end against this release. |
-| **Mobile approval round trip** | Signing format is tested on both sides; a full phone-to-gateway approval has not been run end to end. |
-| **Third-party commercial audit** | Verified by automated unit, vulnerability (`govulncheck`), and live E2E suites (`./scripts/verify_release.sh`, `./scripts/e2e_production.sh`); has not yet undergone a commercial third-party penetration test. |
+| **Full UI fleet** (`start_fleet.sh`) | Requires `composer install` and `npm install && npm run build` in each UI app first; the script checks and tells you what is missing. Automated CI verifies `Sentry_Gateway` + `Core_API` + PostgreSQL + Redis; UI apps are verified via Vitest/Jest suites. |
+| **Mobile approval round trip** | Cryptographic payload binding (decimal length-prefixed `SHA-256(len(Method):Method\nlen(CanonicalURL):CanonicalURL\nlen(Body):Body)` + `TraceID` hold verification) and `Ed25519 + ML-DSA-65` signature verification are unit-tested on both sides in CI; physical phone push notifications require operator FCM/APNs credentials (`RELEASE_SCOPE.md` § 3). |
+| **Third-party commercial audit** | Verified by automated unit, vulnerability (`govulncheck`), and live E2E suites (`./scripts/verify_release.sh`, `./scripts/e2e_production.sh`, `./scripts/count_tests.sh`); has not yet undergone a commercial third-party penetration test. |
 
 ---
 
@@ -231,26 +231,27 @@ Cicada maps directly to the **OWASP Agentic Applications Top 10** in production 
 
 ## Performance Benchmarks (k6 Load Test)
 
-After replacing per-request PostgreSQL lookups on the hot path with a `singleflight`-protected Redis + in-memory cache (`internal/agentcache`) and `sync/atomic.Pointer` lock-free reads, the Go **`Sentry_Gateway`** was benchmarked under sustained load (`Sentry_Gateway/tests/load/proxy_load.js`):
+After replacing per-request PostgreSQL lookups on the hot path with a `singleflight`-protected Redis + in-memory cache (`internal/agentcache`) and `sync/atomic.Pointer` lock-free reads, the Go **`Sentry_Gateway`** was benchmarked under sustained load using two complementary k6 suites in `Sentry_Gateway/tests/load/` (`proxy_load.js` for single-run proxy throughput and `sentry_gateway_load.js` for 5-run aggregate mixed-attack stress testing):
 
-| Metric | Pre-Optimization (Direct DB) | Post-Optimization (`Sentry_Gateway`) | Improvement |
-| :--- | :--- | :--- | :--- |
-| **Median Latency (p50)** | `265.0 ms` | **`6.24 ms`** | **42x faster** |
-| **95th Percentile (p95)** | `1,610.0 ms` | **`19.01 ms`** | **84x faster** |
-| **99th Percentile (p99)** | `2,510.0 ms` | **`50.94 ms`** | **49x faster** |
-| **Standalone In-Memory Gate Check** | N/A | **`0.02 ms – 1.15 ms`** | **Sub-millisecond** |
-| **Unexpected 5xx / Socket Errors** | `0.12%` | **`0.00%` (7,472 / 7,472 reqs)** | **0 failed requests** |
+| Metric | Pre-Optimization (Direct DB) | Single-Run Proxy (`proxy_load.js`) | 5-Run Mixed Aggregate (`sentry_gateway_load.js`) | Improvement |
+| :--- | :--- | :--- | :--- | :--- |
+| **Median Latency (p50)** | `265.0 ms` | **`6.24 ms`** | **`6.5 ms`** | **42x faster** |
+| **95th Percentile (p95)** | `1,610.0 ms` | **`19.01 ms`** | **`19.0 ms`** | **84x faster** |
+| **99th Percentile (p99)** | `2,510.0 ms` – `5,003.0 ms` | **`50.94 ms`** | **`62.0 ms`** | **49x – 81x faster** |
+| **Standalone In-Memory Gate Check** | N/A | **`0.02 ms – 1.15 ms`** | **`0.02 ms – 1.15 ms`** | **Sub-millisecond** |
+| **Unexpected 5xx / Socket Errors** | `0.12%` | **`0.00%` (7,472 / 7,472 reqs)** | **`0.00%` (249 / 249 mixed reqs; TP=199, TN=50, FP=0, FN=0)** | **0 failed requests** |
 
 ---
 
 ## Mathematical Foundations & Academic Citation
 
-The formal mathematical proofs behind Cicada's zero-trust enforcement model, non-LLM lexical intent scoring, and bounded delegation chains are published in:
+The architectural specifications, formal mathematical model, implemented-versus-designed matrix, and empirical evidence boundaries are published in:
 
-> **Matthews, P. (June 2026).** *The Matthews Enforcement Framework (MEF): A Deterministic Mathematical Model for Zero-Trust Autonomous Agent Governance.*
-> - **Zenodo DOI:** [10.5281/zenodo.19597120](https://doi.org/10.5281/zenodo.19597120)
+> **Matthews, P. (2026).** *Path-Dependent Architecture, Runtime Capability Control, and Post-Quantum Cryptographic Assurance for Autonomous AI Agents (Version 3 — Open-Source Release Edition).*
+> - **Version 3 Paper (Markdown & LaTeX):** [`docs/PATH_DEPENDENT_ARCHITECTURE_v3.md`](./docs/PATH_DEPENDENT_ARCHITECTURE_v3.md) / [`docs/PATH_DEPENDENT_ARCHITECTURE_v3.tex`](./docs/PATH_DEPENDENT_ARCHITECTURE_v3.tex)
 > - **SSRN ID:** [6612798](https://papers.ssrn.com/sol3/papers.cfm?abstract_id=6612798)
-> - **Local Specification:** [`docs/MATTHEWS_ENFORCEMENT_FRAMEWORK.md`](./docs/MATTHEWS_ENFORCEMENT_FRAMEWORK.md)
+> - **Original MEF Specification (June 2026):** [`docs/MATTHEWS_ENFORCEMENT_FRAMEWORK.md`](./docs/MATTHEWS_ENFORCEMENT_FRAMEWORK.md)
+> - **GitHub Repository:** [https://github.com/affinity-ops/OS-Cicada](https://github.com/affinity-ops/OS-Cicada)
 
 ---
 

@@ -206,12 +206,24 @@ func resegmentCollapsedKeywords(s string) string {
 	return collapsedKeywordRestorer.Replace(strings.ToLower(s))
 }
 
+// MaxDeobfuscationInputBytes bounds the maximum input byte slice processed by
+// extractDecodedPayloads (64 KB) to prevent superlinear CPU/memory expansion on
+// oversized multi-encoded payloads.
+const MaxDeobfuscationInputBytes = 64 * 1024
+
+// MaxBase64CandidateBytes bounds the maximum length of any single Base64 token
+// candidate decoded during deobfuscation (8 KB).
+const MaxBase64CandidateBytes = 8 * 1024
+
 // extractDecodedPayloads finds Base64, URL-encoded, Hex-escaped, and ROT13
 // segments inside body so the scanner can inspect their decoded plaintext.
 func extractDecodedPayloads(body string) []struct {
 	encoding string
 	decoded  string
 } {
+	if len(body) > MaxDeobfuscationInputBytes {
+		body = body[:MaxDeobfuscationInputBytes]
+	}
 	var out []struct {
 		encoding string
 		decoded  string
@@ -270,6 +282,9 @@ func extractDecodedPayloads(body string) []struct {
 }
 
 func tryDecodeBase64(s string) (string, bool) {
+	if len(s) > MaxBase64CandidateBytes {
+		return "", false
+	}
 	trimmed := strings.TrimRight(s, "=")
 	if len(trimmed) < 16 {
 		return "", false

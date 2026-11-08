@@ -28,6 +28,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -74,12 +75,38 @@ type Result struct {
 	Err         error
 }
 
+// CanonicalizeURL normalizes scheme and host to lowercase, strips default ports
+// (:443 for https, :80 for http), and removes URL fragments (#...) that are never
+// transmitted over the wire.
+func CanonicalizeURL(rawURL string) string {
+	u := strings.TrimSpace(rawURL)
+	parsed, err := url.Parse(u)
+	if err != nil || parsed.Scheme == "" || parsed.Host == "" {
+		return u
+	}
+	parsed.Scheme = strings.ToLower(parsed.Scheme)
+	parsed.Host = strings.ToLower(parsed.Host)
+	if (parsed.Scheme == "https" && strings.HasSuffix(parsed.Host, ":443")) ||
+		(parsed.Scheme == "http" && strings.HasSuffix(parsed.Host, ":80")) {
+		if idx := strings.LastIndex(parsed.Host, ":"); idx != -1 {
+			parsed.Host = parsed.Host[:idx]
+		}
+	}
+	parsed.Fragment = ""
+	return parsed.String()
+}
+
 // ComputePayloadHash computes a deterministic SHA-256 commitment over the
-// length-prefixed HTTP method, target URL, and full request body bytes so CIBA
-// human approvals are cryptographically bound without delimiter ambiguity.
+// decimal-length-prefixed uppercase HTTP method, canonicalized target URL, and
+// raw request body bytes:
+//
+//	SHA-256( fmt.Sprintf("%d:%s\n%d:%s\n%d:", len(M), M, len(U), U, len(B)) || B )
+//
+// Decimal byte-length prefixing with newline/colon delimiters eliminates field
+// boundary ambiguity without modifying raw body bytes.
 func ComputePayloadHash(method, targetURL string, body []byte) string {
 	m := strings.ToUpper(strings.TrimSpace(method))
-	u := strings.TrimSpace(targetURL)
+	u := CanonicalizeURL(targetURL)
 	h := sha256.New()
 	fmt.Fprintf(h, "%d:%s\n%d:%s\n%d:", len(m), m, len(u), u, len(body))
 	h.Write(body)
@@ -167,6 +194,11 @@ func Authorize(ctx context.Context, req Request) Result {
 
 		switch pr.Status {
 		case "approved":
+			if pr.TraceID != "" && pr.TraceID != req.TraceID {
+				log.Printf("[CIBA] TRACE ID MISMATCH for agent=%s (expected %s, got %s) — denying",
+					req.AgentID, req.TraceID, pr.TraceID)
+				return Result{Approved: false, Status: "denied", Err: fmt.Errorf("CIBA trace ID replay check failed")}
+			}
 			if req.PayloadHash != "" {
 				if pr.PayloadHash == "" || subtle.ConstantTimeCompare([]byte(pr.PayloadHash), []byte(req.PayloadHash)) != 1 {
 					log.Printf("[CIBA] PAYLOAD HASH MISSING OR MISMATCH for agent=%s trace=%s (expected %s, got %s) — denying",
