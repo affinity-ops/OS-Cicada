@@ -358,6 +358,61 @@ func TestHandleSimulatedRequest_SelectiveTaintOnGet(t *testing.T) {
 	if recWrite2.Header().Get("X-Cicada-CIBA-Escalated") != "true" {
 		t.Fatalf("expected X-Cicada-CIBA-Escalated=true (Rule of Two CIBA escalation) on write while tainted, got headers: %v", recWrite2.Header())
 	}
+
+	// 5. Unauthenticated X-Cicada-Memory-Action: flush from agent must NOT clear taint
+	t.Setenv("CICADA_INTERNAL_KEY", "test-operator-secret")
+	reqSpoofFlush := httptest.NewRequest(http.MethodPost, "/v1/agent/proxy", strings.NewReader(`{"item":"widget-a","qty":2}`))
+	reqSpoofFlush.Header.Set("Content-Type", "application/json")
+	reqSpoofFlush.Header.Set("X-Cicada-Agent-ID", agentID)
+	reqSpoofFlush.Header.Set("X-Cicada-Target-URL", "https://inventory.internal/v1/items")
+	reqSpoofFlush.Header.Set("X-Cicada-Memory-Action", "flush")
+	recSpoofFlush := httptest.NewRecorder()
+	handleSimulatedRequest(recSpoofFlush, reqSpoofFlush)
+	if _, tainted := taint.IsTainted(ctx, agentID); !tainted {
+		t.Fatal("unauthenticated X-Cicada-Memory-Action: flush must not clear session taint")
+	}
+	if recSpoofFlush.Header().Get("X-Cicada-CIBA-Escalated") != "true" {
+		t.Fatalf("expected tainted write with unauthenticated flush header to still require CIBA, got headers: %v", recSpoofFlush.Header())
+	}
+
+	// 6. Unauthenticated POST /v1/admin/taint/flush is rejected with 401 and leaves taint intact
+	adminFlushHandler := requireServiceOrPortal(http.HandlerFunc(handleTaintFlush))
+	reqUnauthAdminFlush := httptest.NewRequest(http.MethodPost, "/v1/admin/taint/flush", strings.NewReader(`{"agent_id":"`+agentID+`"}`))
+	reqUnauthAdminFlush.Header.Set("Content-Type", "application/json")
+	recUnauthAdminFlush := httptest.NewRecorder()
+	adminFlushHandler.ServeHTTP(recUnauthAdminFlush, reqUnauthAdminFlush)
+	if recUnauthAdminFlush.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 Unauthorized on unauthenticated /v1/admin/taint/flush, got %d", recUnauthAdminFlush.Code)
+	}
+	if _, tainted := taint.IsTainted(ctx, agentID); !tainted {
+		t.Fatal("unauthenticated /v1/admin/taint/flush must not clear session taint")
+	}
+
+	// 7. Operator-authenticated POST /v1/admin/taint/flush clears taint and allows subsequent write without CIBA
+	reqAuthAdminFlush := httptest.NewRequest(http.MethodPost, "/v1/admin/taint/flush", strings.NewReader(`{"agent_id":"`+agentID+`"}`))
+	reqAuthAdminFlush.Header.Set("Content-Type", "application/json")
+	reqAuthAdminFlush.Header.Set("X-Gateway-Secret", "test-operator-secret")
+	recAuthAdminFlush := httptest.NewRecorder()
+	adminFlushHandler.ServeHTTP(recAuthAdminFlush, reqAuthAdminFlush)
+	if recAuthAdminFlush.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK on operator-authenticated /v1/admin/taint/flush, got %d: %s", recAuthAdminFlush.Code, recAuthAdminFlush.Body.String())
+	}
+	if _, tainted := taint.IsTainted(ctx, agentID); tainted {
+		t.Fatal("expected session taint to be cleared after operator-authenticated /v1/admin/taint/flush")
+	}
+
+	reqWriteAfterFlush := httptest.NewRequest(http.MethodPost, "/v1/agent/proxy", strings.NewReader(`{"item":"widget-a","qty":2}`))
+	reqWriteAfterFlush.Header.Set("Content-Type", "application/json")
+	reqWriteAfterFlush.Header.Set("X-Cicada-Agent-ID", agentID)
+	reqWriteAfterFlush.Header.Set("X-Cicada-Target-URL", "https://inventory.internal/v1/items")
+	recWriteAfterFlush := httptest.NewRecorder()
+	handleSimulatedRequest(recWriteAfterFlush, reqWriteAfterFlush)
+	if recWriteAfterFlush.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK on internal POST after operator taint flush, got %d", recWriteAfterFlush.Code)
+	}
+	if recWriteAfterFlush.Header().Get("X-Cicada-CIBA-Escalated") == "true" {
+		t.Fatal("did not expect CIBA escalation after operator-authenticated taint flush")
+	}
 }
 
 func TestHandleMCPExecution_PipelineAndManifest(t *testing.T) {

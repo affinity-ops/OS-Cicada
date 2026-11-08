@@ -17,8 +17,8 @@
 //  2. While a session is tainted, it loses autonomous capability to mutate
 //     state (POST, PUT, PATCH, DELETE) or exfiltrate data externally without
 //     explicit human-in-the-loop (CIBA) approval.
-//  3. Taint is cleared only when the agent performs a verified context flush
-//     (X-Cicada-Memory-Action: flush) or receives operator CIBA sign-off.
+//  3. Taint is cleared only when an authenticated operator flushes taint
+//     (POST /v1/admin/taint/flush or X-Gateway-Secret) or approves the action via CIBA.
 package taint
 
 import (

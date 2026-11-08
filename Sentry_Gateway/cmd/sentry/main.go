@@ -646,6 +646,7 @@ func main() {
 	r.With(requireService).Post("/v1/sandbox/report", handleSandboxReport)   // anomaly reports from shadow sandbox
 	r.With(requireServiceOrPortal).Post("/v1/admin/canary/issue", handleCanaryIssue)   // issue agent/tenant-scoped honeytoken
 	r.With(requireServiceOrPortal).Post("/v1/admin/canary/revoke", handleCanaryRevoke) // revoke active honeytoken
+	r.With(requireServiceOrPortal).Post("/v1/admin/taint/flush", handleTaintFlush)     // operator-authenticated session taint flush
 	r.Get("/v1/verify/agent/{evar}", handlePublicTrustIntrospection)
 	r.Post("/v1/vault/keys/bind", handleKeyBinding)
 	r.Post("/v1/aegis/directives", handleAegisDirectives)
@@ -2354,8 +2355,12 @@ func handleAgentRequest(w http.ResponseWriter, r *http.Request) {
 	sessionIDHdr := r.Header.Get("X-Cicada-Session-ID")
 	taintScopeKey := taint.ScopeKey(agentID, sessionIDHdr)
 	if r.Header.Get("X-Cicada-Memory-Action") == "flush" {
-		taint.ClearTaint(r.Context(), taintScopeKey)
-		taint.ClearTaint(r.Context(), agentID)
+		if internalKeyOK(r) {
+			taint.ClearTaint(r.Context(), taintScopeKey)
+			taint.ClearTaint(r.Context(), agentID)
+		} else {
+			log.Printf("[TAINT] Rejected unauthenticated X-Cicada-Memory-Action: flush for agent %s (requires operator auth or CIBA approval)", agentID)
+		}
 	}
 
 	var agentDesc, agentType string
@@ -3994,8 +3999,12 @@ func handleLLMProxy(w http.ResponseWriter, r *http.Request) {
 	sessionIDHdr := r.Header.Get("X-Cicada-Session-ID")
 	taintScopeKey := taint.ScopeKey(agentID, sessionIDHdr)
 	if r.Header.Get("X-Cicada-Memory-Action") == "flush" {
-		taint.ClearTaint(r.Context(), taintScopeKey)
-		taint.ClearTaint(r.Context(), agentID)
+		if internalKeyOK(r) {
+			taint.ClearTaint(r.Context(), taintScopeKey)
+			taint.ClearTaint(r.Context(), agentID)
+		} else {
+			log.Printf("[TAINT] Rejected unauthenticated X-Cicada-Memory-Action: flush for agent %s (requires operator auth or CIBA approval)", agentID)
+		}
 	}
 	llmProv := r.Header.Get("X-Cicada-Content-Provenance")
 	if taint.IsUntrustedProvenance(llmProv) {
@@ -4519,8 +4528,12 @@ func handleSimulatedRequest(w http.ResponseWriter, r *http.Request) {
 	sessionIDHdr := r.Header.Get("X-Cicada-Session-ID")
 	taintScopeKey := taint.ScopeKey(agentID, sessionIDHdr)
 	if r.Header.Get("X-Cicada-Memory-Action") == "flush" {
-		taint.ClearTaint(r.Context(), taintScopeKey)
-		taint.ClearTaint(r.Context(), agentID)
+		if internalKeyOK(r) {
+			taint.ClearTaint(r.Context(), taintScopeKey)
+			taint.ClearTaint(r.Context(), agentID)
+		} else {
+			log.Printf("[TAINT] Rejected unauthenticated X-Cicada-Memory-Action: flush for agent %s (requires operator auth or CIBA approval)", agentID)
+		}
 	}
 	agentDesc := r.Header.Get("X-Cicada-Agent-Description")
 	agentType := r.Header.Get("X-Cicada-Agent-Type")
@@ -4856,5 +4869,33 @@ func handleCanaryRevoke(w http.ResponseWriter, r *http.Request) {
 		"status":    "revoked",
 		"tenant_id": req.TenantID,
 		"token":     req.Token,
+	})
+}
+
+func handleTaintFlush(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		AgentID   string `json:"agent_id"`
+		SessionID string `json:"session_id"`
+	}
+	if err := json.NewDecoder(io.LimitReader(r.Body, 64*1024)).Decode(&req); err != nil {
+		writeError(w, `{"error":"invalid JSON payload"}`, http.StatusBadRequest)
+		return
+	}
+	req.AgentID = strings.TrimSpace(req.AgentID)
+	req.SessionID = strings.TrimSpace(req.SessionID)
+	if req.AgentID == "" {
+		writeError(w, `{"error":"agent_id is required"}`, http.StatusBadRequest)
+		return
+	}
+	scopeKey := taint.ScopeKey(req.AgentID, req.SessionID)
+	taint.ClearTaint(r.Context(), scopeKey)
+	if req.SessionID == "" {
+		taint.ClearTaint(r.Context(), req.AgentID)
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"status":     "flushed",
+		"agent_id":   req.AgentID,
+		"session_id": req.SessionID,
+		"scope_key":  scopeKey,
 	})
 }
