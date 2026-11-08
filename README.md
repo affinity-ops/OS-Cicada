@@ -4,7 +4,7 @@
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](./LICENSE)
 [![Go 1.26+](https://img.shields.io/badge/Go-1.26+-00ADD8.svg)](./Sentry_Gateway)
 [![Architecture Paper v3](https://img.shields.io/badge/Paper_v3-Path--Dependent_Architecture-orange.svg)](./docs/PATH_DEPENDENT_ARCHITECTURE_v3.md)
-[![OWASP Agentic Top 10](https://img.shields.io/badge/OWASP_Agentic_AI-ASI01--ASI10-emerald.svg)](./docs/ARCHITECTURE_DEEP_DIVE.md)
+[![OWASP Agentic Top 10](https://img.shields.io/badge/OWASP_Agentic_AI-ASI01--ASI10-emerald.svg)](#owasp-agentic-ai-top-10-asi01--asi10-coverage)
 [![Latency p95](https://img.shields.io/badge/p95_Latency-19ms-brightgreen.svg)](#performance-benchmarks-k6-load-test)
 
 > **Overview & Attribution:** Cicada is a self-hosted, Apache-2.0 runtime enforcement gateway for autonomous AI agents, architected and built over 8 months by systems architect **Patrick Matthews** (Affinity Ops / Affinity Smart AI) based on the **Matthews Enforcement Framework (MEF)** ([Paper v3](./docs/PATH_DEPENDENT_ARCHITECTURE_v3.md) / [SSRN 6612798](https://papers.ssrn.com/sol3/papers.cfm?abstract_id=6612798)). Rather than relying on slow, probabilistic LLM-judging-LLM prompt wrappers, `Sentry_Gateway` enforces deterministic capability controls at the network perimeter—combining scoped Ed25519/DPoP sessions, OPA Rego policy, **Meta's Agents Rule of Two**, **CaMeL-style session taint tracking**, **server-side tool manifest resolution**, **BYOK vault key injection**, and **SHA-256 payload-bound CIBA human approvals** across a unified 9-layer admission pipeline. The gateway's production request path is verified end to end against PostgreSQL, Redis, and the Core API (`./scripts/e2e_production.sh`, 23/23 checks) and passes `govulncheck` with zero reachable vulnerabilities (`./scripts/verify_release.sh`). Reproducible test counts across all 104 test files (1,299 top-level test definitions) can be verified via `./scripts/count_tests.sh`. For transparency on scope boundaries, optional dependencies, and unimplemented auxiliary features, see [Scope and Limitations](#scope-and-limitations) and [`RELEASE_SCOPE.md`](./RELEASE_SCOPE.md). Under [Apache 2.0 (§ 4(c)–(d))](./LICENSE) and [NOTICE](./NOTICE), any clone, fork, or derivative work must credit **Patrick Matthews** ([details below](#license-and-attribution)).
@@ -304,19 +304,20 @@ If you are an architecture purist looking to criticize monolithic functions, ple
 When pointing your AI coding assistant (Cursor, Claude, Windsurf, Antigravity) at this repository, you can run prompts like:
 
 ```text
-Read `/docs/Platform_Documentation.md` and inspect `Sentry_Gateway/cmd/sentry/main.go`. Refactor one inline handler (e.g. `handleLLMProxy`) out of `main.go` into a dedicated package inside `internal/server/handlers/llm.go`. Ensure all OPA context and error handling remains identical. Run `go test ./...` to verify zero regression.
+Read `RELEASE_SCOPE.md` and inspect `Sentry_Gateway/cmd/sentry/main.go`. Refactor one inline handler (e.g. `handleLLMProxy`) out of `main.go` into a dedicated package inside `internal/server/handlers/llm.go`. Ensure all OPA context and error handling remains identical. Run `go test ./...` to verify zero regression.
 ```
 
 ---
 
 ## Deep-Dive Documentation (`docs/`)
 
-- **[`RELEASE_SCOPE.md`](./RELEASE_SCOPE.md)** — Implemented-versus-designed engineering matrix (covering `eakfd`, handler parity, k6 load scripts, and post-June paper additions).
-- **[`ARCHITECTURE_DEEP_DIVE.md`](./docs/ARCHITECTURE_DEEP_DIVE.md)** — Complete walkthrough of all 15 enforcement layers, cryptographic primitives, and threat models.
-- **[`EPHEMERAL_AGENT_KERNEL_FIREWALL.md`](./docs/EPHEMERAL_AGENT_KERNEL_FIREWALL.md)** — Specification for the `eakfd` gVisor/Kata kernel sandbox and `.tfstate`/IP output scrubber.
+- **[`RELEASE_SCOPE.md`](./RELEASE_SCOPE.md)** — Implemented-versus-designed engineering matrix (covering the 15-Stage Gateway Lifecycle, 9-Layer `pipeline.Evaluate` admission pipeline, handler parity, and k6 load scripts).
+- **[`PATH_DEPENDENT_ARCHITECTURE_v3.md`](./docs/PATH_DEPENDENT_ARCHITECTURE_v3.md) / [`PATH_DEPENDENT_ARCHITECTURE_v3.tex`](./docs/PATH_DEPENDENT_ARCHITECTURE_v3.tex)** — Complete Version 3 technical paper (reconciling the 10 conceptual MEF layers, 15-stage lifecycle, and 9-layer admission pipeline, with fail-open/fail-closed tables, formal CIBA and taint analysis, confusion matrices, and reproducible CI test counts via `./scripts/count_tests.sh`).
+- **[`MATTHEWS_ENFORCEMENT_FRAMEWORK.md`](./docs/MATTHEWS_ENFORCEMENT_FRAMEWORK.md)** — Foundational 10-layer conceptual specification (originally published June 2026; updated for `v1.0.3`).
+- **[`EPHEMERAL_AGENT_KERNEL_FIREWALL.md`](./docs/EPHEMERAL_AGENT_KERNEL_FIREWALL.md)** — Architectural blueprint for the `eakfd` subprocess/gVisor/Kata sandbox and 3-pass `.tfstate`/IP output scrubber (noting Firecracker microVM and `TPROXY` sections as design proposals).
 - **[`CICADA_P2P_ARCHITECTURE_WHITEPAPER.md`](./docs/CICADA_P2P_ARCHITECTURE_WHITEPAPER.md)** — Lock-free P2P Gossip Mesh protocol and hybrid Ed25519 + ML-DSA-65 signature envelopes.
-- **[`MATTHEWS_ENFORCEMENT_FRAMEWORK.md`](./docs/MATTHEWS_ENFORCEMENT_FRAMEWORK.md)** — Mathematical model and formal proofs (Zenodo / SSRN).
-- **[`Security_Audit_Test_Results.md`](./docs/Security_Audit_Test_Results.md)** — Historical security hardening log (iterations 1–32), CVE mitigations, and load test telemetry. Point-in-time snapshots; some predate the current pipeline.
+- **[`DEPENDENCY_LICENSE_AUDIT.md`](./docs/DEPENDENCY_LICENSE_AUDIT.md)** — Permissive license verification across Go, Python, PHP, and Node.js dependencies.
+- **[`Schema_Ownership_ADR.md`](./docs/Schema_Ownership_ADR.md)** — Architecture Decision Record on PostgreSQL table ownership between `Sentry_Gateway` (Go) and `Core_API` (Laravel).
 
 ---
 

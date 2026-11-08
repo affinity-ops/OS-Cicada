@@ -1,14 +1,13 @@
-# Architectural Specification & Whitepaper: The Cicada Architecture
+# Architectural Specification & Whitepaper: The Cicada P2P Gossip Mesh
 
 **A Sovereign, Decentralised P2P Intrusion Detection & Governance Mesh for Autonomous AI Agents**
 
-**Document Status:** Architectural Specification — Core mesh architecture IMPLEMENTED (Iteration 30, 16 June 2026)  
-**Added to Technical Truth:** 16 June 2026  
-**Implementation Verified:** 38/38 tests PASS across gossip, threat intel, and mesh directory  
-**Cross-reference:** See `Security_Audit_Test_Results.md` → Iteration 30 for full test results
+**Author:** Patrick Matthews (Affinity Ops / Affinity Smart AI — `info@affinitysmartai.co.uk`)  
+**Document Status:** Architectural Specification — Implemented in `Sentry_Gateway/internal/gossip`, `internal/threatintel`, and `Mesh_Directory` (`v1.0.3`)  
+**Cross-reference:** See [`RELEASE_SCOPE.md`](../RELEASE_SCOPE.md) and [`docs/PATH_DEPENDENT_ARCHITECTURE_v3.md`](./PATH_DEPENDENT_ARCHITECTURE_v3.md)
 
 > [!NOTE]
-> As of Iteration 30 (16 June 2026), the core mesh architecture described in this whitepaper is **implemented and tested**. Tenant isolation, PQC hybrid per-peer authentication, anonymised threat intelligence, and the Mesh Directory service are all operational with 38 passing security tests.
+> In `v1.0.3`, lock-free `sync/atomic.Pointer` quarantine reads (`internal/gossip`), anonymised threat intelligence (`internal/threatintel`), and the `Mesh_Directory` peer discovery service are implemented and tested. When a peer registry (`CICADA_GOSSIP_PEERS_CONFIG`) is configured with peer public keys, gossip quarantine batches are dual-signed per node with **Ed25519 + NIST FIPS 204 ML-DSA-65** (`internal/gossip/peer.go`); otherwise nodes authenticate batches using a shared HMAC secret (`CICADA_GOSSIP_SECRET`).
 
 ---
 

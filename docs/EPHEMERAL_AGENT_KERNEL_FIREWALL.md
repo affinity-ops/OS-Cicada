@@ -3,8 +3,14 @@
 ## Mitigating "The DevOps Wall" and Host-Level Lateral Movement
 
 **Classification:** Technical Blueprint & Architecture Design  
-**Author:** Affinity Ops Engineering  
-**Status:** Draft / Next-Generation Proposal  
+**Author:** Patrick Matthews (Affinity Ops / Affinity Smart AI — `info@affinitysmartai.co.uk`)  
+**Status:** Architectural Blueprint — Subprocess Daemon + 3-Pass Deterministic State Sieve Implemented (`cmd/eakfd`); Firecracker microVMs & Kernel `TPROXY` Design-Only
+
+> [!IMPORTANT]
+> **Implemented vs. Designed Scope in `v1.0.3` ([`RELEASE_SCOPE.md`](../RELEASE_SCOPE.md)):**
+> * **Implemented in Code (`Sentry_Gateway/cmd/eakfd/main.go` & `internal/eakfd/scrub/scrub.go`):** A Go gRPC daemon over UNIX Domain Socket (`eakfd`) that executes code snippets in isolated subprocesses with temporary directories, hard execution timeouts, stripped environment variables, and the 3-pass Deterministic State Sieve (scrubbing 11 credential formats, RFC 1918/IMDSv2 IPs, and `.tfstate` blocks). The gateway decides server-side from the tool manifest (`req.EAKFEnabled`) whether to route through `eakfd` and fails closed (`503`) if the daemon is unreachable.
+> * **Supplied by Kubernetes Deployment (`k8s/eakfd-sandbox-deployment.yaml` & `deploy/k8s/eakfd-networkpolicy.yaml`):** Kernel syscall isolation (`gVisor` `runsc` or `Kata Containers` `RuntimeClass`) and default-deny egress lockdown.
+> * **Design-Only Proposals in This Blueprint:** Bare-metal Firecracker microVM snapshot orchestration (§ 7.3) and Linux kernel `TPROXY` transparent socket interception described below are next-generation architectural design proposals and are not implemented in `cmd/eakfd`.  
 
 ---
 

@@ -1,23 +1,25 @@
 # The Matthews Enforcement Framework: A Prospective, Path-Dependent Architecture for Runtime AI Agent Governance
 
-**Author:** Patrick Matthews, Patrick Matthews (Affinity Ops / Affinity Smart AI)
-**Published:** 4 June 2026
-**Status:** White Paper (Part 1 & 2)
+**Author:** Patrick Matthews (Affinity Ops / Affinity Smart AI — `info@affinitysmartai.co.uk`)  
+**Originally Published:** 4 June 2026 (Conceptual 10-Layer Specification)  
+**Updated for Open-Source Release (`v1.0.3`):** 7 November 2026
 
-> **Note:** This document is the in-repository copy of the MEF white paper, originally published externally. It is the foundational governance thesis upon which the Cicada platform is built. All references to MEF in the Buyer's Deployment Guide, Engineering Assessment Response, and Technical Truth documentation trace back to this document.
+> [!IMPORTANT]
+> **Relationship to the Version 3 Architecture Paper & `RELEASE_SCOPE.md`:**
+> This document preserves the foundational **10-Layer Conceptual Specification** of the Matthews Enforcement Framework (MEF) originally formulated in June 2026. For the complete, code-verified open-source reference implementation (`v1.0.3`), see **[`docs/PATH_DEPENDENT_ARCHITECTURE_v3.md`](./PATH_DEPENDENT_ARCHITECTURE_v3.md)** and **[`RELEASE_SCOPE.md`](../RELEASE_SCOPE.md)**, which map these 10 conceptual layers 1-for-1 onto the **15-Stage Gateway Request Lifecycle** (`cmd/sentry/main.go`) and the **9-Layer Deterministic Admission Pipeline** (`internal/pipeline/pipeline.go`).
 
 ---
 
 ## Table of Contents
 
 1. [Executive Summary](#1-executive-summary)
-2. [Problem Statement](#2-problem-statement)
-3. [Theoretical Foundations](#3-theoretical-foundations)
+2. [Problem Statement](#2-problem-statement-why-reactive-and-identity-only-security-models-fail-autonomous-ai-agents)
+3. [Theoretical Foundations](#3-theoretical-foundations-path-dependent-governance-and-the-four-pillars-of-ai-agent-control)
 4. [The Matthews Enforcement Framework: Architecture and Core Thesis](#4-the-matthews-enforcement-framework-architecture-and-core-thesis)
 5. [The Ten-Layer Defence-in-Depth Enforcement Pipeline](#5-the-ten-layer-defence-in-depth-enforcement-pipeline)
-6. [Post-Quantum Cryptographic Identity and the Agent Certification Lifecycle](#6-post-quantum-cryptographic-identity-and-the-agent-certification-lifecycle)
-7. [Empirical Validation and Regulatory Alignment in Q2 2026](#7-empirical-validation-and-regulatory-alignment-in-q2-2026)
-8. [MEF as a Category-Defining Standard: Cicada as the Sole Production Reference Implementation](#8-mef-as-a-category-defining-standard)
+6. [Post-Quantum Cryptographic Identity and Governance Assurance](#6-post-quantum-cryptographic-identity-and-governance-assurance)
+7. [Empirical Validation and Regulatory Relevance](#7-empirical-validation-and-regulatory-relevance)
+8. [Relationship to Contemporary Frameworks and the Cicada Reference Implementation](#8-relationship-to-contemporary-frameworks-and-the-cicada-reference-implementation)
 
 ---
 
@@ -31,9 +33,9 @@ The Matthews Enforcement Framework is a prospective, path-dependent architecture
 
 Reactive security models rely on detective and reactive controls, focusing on incident response and breach containment. However, these approaches are inadequate for autonomous AI agents, which operate in real-time and make decisions independently. The complexity and speed of AI-driven systems require a proactive, preventative approach to governance.
 
-Identity-only security models, on the other hand, focus solely on agent identity and authentication. While identity management is crucial, it is insufficient to ensure the secure operation of autonomous AI agents. These models fail to address the nuances of AI decision-making, neglecting the context, intent, and behavioural aspects of agent interactions.
+Identity-only security models, on the other hand, focus solely on agent identity and authentication. While identity management is crucial, it is insufficient to ensure the secure operation of autonomous AI agents. These models fail to address the nuances of AI decision-making, neglecting the action sequence, untrusted data provenance (taint), and behavioural aspects of agent interactions.
 
-According to a report by Boston Consulting Group, only 1.3% of organizations have implemented effective enterprise agents, highlighting the need for a more comprehensive approach to AI agent governance (Boston Consulting Group, 2022). The EU AI Act, set to take effect in 2024, will introduce strict regulations on AI development and deployment, further emphasizing the imperative for robust governance models (European Union, 2021).
+As codified in the **OWASP Top 10 for Agentic Applications (December 2025)** and the **NIST AI Agent Standards Initiative (17 February 2026)**, tool-using agents introduce path-dependent risks (`ASI01`–`ASI10`) that stateless API gateways cannot evaluate. Furthermore, the **EU Artificial Intelligence Act (Regulation (EU) 2024/1689, as amended by Regulation (EU) 2026/1744)** establishes strict risk management, record-keeping, and human-oversight obligations for high-risk AI providers and deployers.
 
 ---
 
@@ -97,119 +99,103 @@ This pipeline architecture reflects a foundational design principle: that no sin
 
 **Layer 7: Policy Evaluation Against Path History.** This layer represents MEF's most distinctive technical contribution. Layer 7 evaluates the proposed action not merely against static policy rules but against the entire sequence of actions taken by the agent within the current session — the action path. Path-dependent policy evaluation enables governance constraints that cannot be expressed in any single-action policy language. The formal apparatus underlying this layer is closely related to the path-dependent policy framework independently formalised by Kaptein et al. (arXiv:2603.16586, March 2026), though MEF's implementation was conceived and deployed in production code prior to that theoretical formalisation.
 
-**Layer 8: Cryptographically Signed Action Authorisation.** For actions that pass all preceding layers, Layer 8 generates a cryptographically signed authorisation token. This token is signed using the post-quantum hybrid signature scheme — Ed25519 combined with ML-DSA-65 — providing both classical and quantum-resistant authenticity guarantees.
+**Layer 8: Cryptographically Verified Action Authorisation & Outbound DLP.** For actions that pass all preceding layers, Layer 8 verifies the caller's cryptographic session token (compact 64-byte classical `Ed25519` for per-request 24h EVARs and 5m JIT session JWTs), strips client `Authorization`/`X-Cicada-*` headers, injects decrypted BYOK vault credentials over a DNS-pinned socket (`proxyTransport.DialContext`), and inspects outbound/inbound payloads for credential or PII exfiltration (`internal/output`).
 
-**Layer 9: Immutable Audit Trail Generation.** Every action evaluated by the MEF pipeline generates a tamper-evident audit record appended to the agent's immutable audit trail. Immutability is achieved through a hash-chaining mechanism: each audit record incorporates the cryptographic hash of the preceding record.
+**Layer 9: Immutable Audit Trail Generation.** Every action evaluated by the MEF pipeline generates a tamper-evident audit record appended to the agent's SHA-256 hash-chained audit trail (`internal/ledger`): each audit record incorporates the cryptographic SHA-256 hash of the preceding record.
 
-### Layer 10: Mandatory Human-in-the-Loop Authorization
+### Layer 10: Mandatory Human-in-the-Loop Authorization (CIBA)
 
-Layer 10 is architecturally distinct from all preceding layers in that it is not an automated computational gate but a mandatory human decision point. For actions whose contextual risk score exceeds a policy-defined threshold, MEF requires explicit human authorisation through a cryptographically signed biometric approval: the authorising human presents a biometric credential that is bound to their identity certificate, and the resulting approval is digitally signed under the same post-quantum hybrid scheme.
+Layer 10 is architecturally distinct from all preceding layers in that it is not an automated computational gate but a mandatory human decision point. For actions whose contextual risk score exceeds a policy-defined threshold—or when triggered by destructive classification (Layer 7), behavioural drift (Layer 5), or CaMeL session taint (Layer 7)—MEF requires explicit out-of-band human authorisation via Client-Initiated Backchannel Authentication (`internal/ciba`). The human operator inspects the full untruncated request payload, authenticates via hardware biometrics, and signs the approval decision bound to the decimal length-prefixed SHA-256 hash of the HTTP method, canonicalised URL, and body bytes (`approved_payload_hash`) plus the hold `TraceID` nonce using hybrid `Ed25519 + ML-DSA-65` signatures.
 
 ---
 
-## 6. Post-Quantum Cryptographic Identity and the Agent Certification Lifecycle
+## 6. Post-Quantum Cryptographic Identity and Governance Assurance
 
-### Ed25519 and ML-DSA-65 as Quantum-Resistant Primitives
+### Classical `Ed25519` for Ephemeral Session Tokens vs. Hybrid `Ed25519 + ML-DSA-65` for Governance Boundaries
 
-The cryptographic primitives at the core of MEF's identity architecture are Ed25519 and ML-DSA-65, deployed in a hybrid signature scheme that simultaneously satisfies classical and post-quantum security requirements.
+In the open-source reference implementation (`Sentry_Gateway`), cryptographic primitives are matched to the lifetime and header constraints of each boundary:
 
-- **Ed25519**: Elliptic curve digital signature algorithm over Curve25519, offering 128-bit classical security with compact signatures and high-performance operations.
-- **ML-DSA-65**: Lattice-based digital signature algorithm standardised by NIST, offering Security Level 3. Its security derives from the hardness of the Module Learning With Errors problem, which is not susceptible to Shor's algorithm.
-
-The hybrid scheme requires both signatures to verify successfully, meaning breaking the token requires simultaneously breaking both schemes.
+- **Per-Request Agent Tokens (`Ed25519` / `EdDSA`):** 24-hour Enterprise Verified Agent Records (`internal/auth/evar_minter.go`) and 5-minute Just-In-Time (JIT) session JWTs (`internal/session/session.go`) use compact 64-byte classical **Ed25519** signatures to avoid adding a 3,309-byte ML-DSA-65 signature to every HTTP request header.
+- **High-Consequence Governance Boundaries (`Ed25519 + ML-DSA-65`, NIST FIPS 204):** Hybrid classical + post-quantum dual signatures (`pkg/pqc/mldsa.go` via `cloudflare/circl/sign/mldsa/mldsa65`) are wired at three long-lived governance and control-plane boundaries where multi-year audit non-repudiation is required:
+  1. **Mobile CIBA Human Approval Decisions** (`internal/mobile/handlers_lifecycle.go`)
+  2. **Inter-Gateway P2P Gossip Quarantine Broadcasts** (`internal/gossip/peer.go`)
+  3. **Platform Entitlement & Vendor Authentication Envelopes** (`internal/license/enforcer.go`)
 
 ### The Certification Lifecycle
 
-MEF treats agent identity certificates as first-class governance artefacts with four phases:
+MEF treats agent registrations as first-class governance artefacts with four phases:
 
-1. **Issuance**: Certificate issued upon successful provenance verification, encoding public keys, policy binding, permitted action classes, and validity period.
-2. **Rotation**: Periodic key renewal at policy-defined intervals with non-disruptive overlap periods.
-3. **Revocation**: Soft revocation (grace period for in-flight actions) and hard revocation (immediate termination for incident response).
-4. **Audit**: Continuous monitoring of certificate state with structured reports on issuance, rotation compliance, and anomalies.
-
----
-
-## 7. Empirical Validation and Regulatory Alignment in Q2 2026
-
-### Test Suite Verification
-
-MEF's validation suite comprises **1,143 automated tests** (exceeding the originally published figure of 1,052) executed across the following languages and components:
-
-| Language | Component | Test Count |
-|----------|-----------|----------:|
-| Go | Sentry Gateway (52 test files) | 684 |
-| Dart | Aegis Mobile App | 42 |
-| PHP | Core API | 71 |
-| Python | SDK, Verification Swarm, Saga Executor | 181 |
-| TypeScript/TSX | Operator Dashboard, Developer Portal | 163 |
-| Go | Licensing Authority | 2 |
-| **Total** | | **1,143** |
-
-Zero failures recorded across the complete test run. The test suite is executed in its entirety with each code change, ensuring the zero-failure benchmark is preserved.
-
-### EU AI Act Alignment
-
-The EU Artificial Intelligence Act (Regulation (EU) 2024/1689) provisions map directly to MEF's architecture:
-
-| EU AI Act Article | Requirement | MEF Layer |
-|---|---|---|
-| Article 9 | Risk management system | Layers 1–6 (continuous risk assessment) |
-| Article 10 | Data governance | Layer 2 (input sanitisation) + Layer 3 (schema validation) |
-| Article 11 | Technical documentation | Certification lifecycle audit records |
-| Article 12 | Automatic event logging | Layer 9 (immutable audit trail) |
-| Article 13 | Transparency | Certification audit function |
-| Article 14 | Human oversight | Layer 10 (biometric HITL) |
-| Article 15 | Accuracy, robustness, cybersecurity | Layer 3b (skill contract enforcement, anti-rot flush) |
-| Articles 43–46 | Conformity assessment | Agent certification lifecycle |
+1. **Issuance**: Provisional registration (`pending_review` forced into read-only shadow observation) promoted to `certified` upon operator approval, binding public keys, tool manifests (`agent_tools`), and permitted scopes.
+2. **Rotation**: Periodic key and JIT session token renewal (`internal/rotation`, `internal/session`).
+3. **Revocation**: Immediate local and P2P gossip quarantine (`internal/gossip`) and CAEP revocation (`internal/caep`).
+4. **Audit**: Immutable `certification_events` and SHA-256 hash-chained `action_ledger` records (`internal/ledger`).
 
 ---
 
-## 8. MEF as a Category-Defining Standard
+## 7. Empirical Validation and Regulatory Relevance
 
-### Competitive Landscape (Q2 2026)
+### Reproducible Test Suite Verification (`scripts/count_tests.sh`)
 
-| Framework | Strengths | What MEF Adds |
+In release `v1.0.3`, the open-source repository includes a deterministic test-counting script ([`scripts/count_tests.sh`](../scripts/count_tests.sh), executed on every GitHub Actions CI run) verifying **1,299 top-level test definitions across 104 test files**, plus **23 live production-path E2E checks** ([`scripts/e2e_production.sh`](../scripts/e2e_production.sh)):
+
+| Language | Component Directory | Test Files | Top-Level Test Count |
+|----------|---------------------|-----------:|---------------------:|
+| Go (Gateway) | `Sentry_Gateway` (plus 40 `t.Run`, 22 corpus cases, 15 benchmarks) | 65 | 760 |
+| Go (Companion) | `Shadow_Sandbox`, `Mesh_Directory`, `Licensing_Authority` | 4 | 50 |
+| PHP | `Core_API/tests` | 9 | 82 |
+| Python | `Cicada_SDK/python/tests`, `Verification_Swarm`, `Saga_Executor` | 8 | 174 |
+| TypeScript/JS | `Developer_Portal/src`, `dashboard/src`, `Cicada_SDK/node/src` | 14 | 179 |
+| Dart/Flutter | `Ciba_Flutter_App/test` (42 `test` + 12 `testWidgets`) | 4 | 54 |
+| **Total** | **All Open-Source Test Files (`bash ./scripts/count_tests.sh`)** | **104** | **1,299** |
+
+### EU AI Act Technical Relevance (Regulation (EU) 2024/1689 & Regulation (EU) 2026/1744)
+
+Following the EU Digital Omnibus on AI (**Regulation (EU) 2026/1744**), high-risk obligations apply from **2 December 2027** (Annex III) and **2 August 2028** (Annex I). The table below illustrates how MEF's technical controls support provider (Articles 9–15) and deployer (Article 26) compliance engineering (technical support only, not legal conformity certification):
+
+| EU AI Act Article | Role | Requirement | MEF / Cicada Technical Mechanism |
+|---|---|---|---|
+| Article 9 | Provider | Risk management system | 9-layer `pipeline.Evaluate` admission pipeline + session taint tracking |
+| Article 10 | Provider | Data governance | Layer 1/2 deobfuscation, Rule-of-Two registration sanitiser, JSON Schema validation |
+| Article 11 | Provider | Technical documentation | Immutable `certification_events` and versioned `agent_tools` manifests |
+| Article 12 | Provider | Automatic event logging | Stage 15 SHA-256 hash-chained audit ledger (`internal/ledger`) |
+| Article 13 | Provider | Transparency | Deterministic rejection reason codes and `[HITL-SHADOW]` telemetry |
+| Article 14 | Provider | Human oversight | Mandatory CIBA approval bound to `SHA-256(Method, CanonicalURL, Body)` + `TraceID` |
+| Article 15 | Provider | Accuracy, robustness, cybersecurity | Server-side tool scoping, CaMeL taint escalation, `DialContext` IP-pinned SSRF guard |
+| Article 26 | Deployer | Deployer human oversight & log retention | Self-hosted gateway policy enforcement, CIBA operator assignment, local audit retention |
+
+---
+
+## 8. Relationship to Contemporary Frameworks and the Cicada Reference Implementation
+
+| Framework / Literature | Focus Area | How Cicada / MEF Operationalises or Complements It |
 |---|---|---|
-| Microsoft Agent Governance Toolkit | Azure IAM integration, policy binding | Multi-layer semantic/behavioural analysis (L4–7), PQC identity |
-| GaaS (Gaurav et al., 2025) | Modular policy enforcement | Production implementation, path-dependent evaluation, 1,143-test validation |
-| FINOS/Tetrate AI Governance | Open-source, financial services compliance | Internal reasoning/planning pathology detection (L4–6) |
-| Kaptein et al. (2026) | Rigorous path-dependent formal framework | Production implementation predating the theoretical formalisation |
-| Governance-in-the-Loop | Continuous policy enforcement loop | Cryptographic identity, PQC assurance, empirical validation at scale |
+| **OWASP Agentic Top 10 (Dec 2025)** | Taxonomy of 10 agentic failure modes (`ASI01`–`ASI10`) | Direct enforcement modules in `Sentry_Gateway/internal/` across all 10 categories |
+| **CaMeL (Debenedetti et al., 2025)** | Provenance and control/data-flow separation | Network-layer session taint tracking (`internal/taint`) across all untrusted external responses |
+| **Meta AI's Agents Rule of Two (2025)** | Bounding the `[ABC]` autonomy trifecta | Registration-time `RULE_OF_TWO_TRIFECTA` gate (`sanitizer.go`) + runtime taint CIBA escalation |
+| **Kaptein et al. (March 2026)** | Formal path-dependent policy predicates | Redis-backed forward-saga prerequisite verification (`internal/prerequisite`) recorded post-`2xx`/`3xx` |
+| **Nasr et al. ("The Attacker Moves Second", 2025)** | Adaptive bypasses of classifier defences | Motivates positioning regex/semantic scanners as baseline filters while relying on deterministic tool scope, prerequisites, taint, and CIBA hash binding as the primary security boundary |
 
-### Cicada: The Production Reference Implementation
-
-Cicada is the production reference implementation of MEF — the software system in which MEF's ten-layer enforcement pipeline, post-quantum cryptographic identity architecture, agent certification lifecycle, and immutable audit trail are implemented as deployable, production-grade components.
-
-Cicada's architecture is designed for deployment as a **governance sidecar** — a component that operates alongside agent systems without requiring modification to the agents' internal architecture or model weights.
-
-**Verified codebase statistics (12 June 2026):**
-
-| Component | Language | Lines of Code |
-|---|---|---:|
-| Sentry Gateway | Go | 36,025 |
-| Core API | PHP | 22,689 |
-| Operator Dashboard + Portals | TypeScript/TSX | 25,529 |
-| Verification Swarm + Saga + SDK | Python | 10,555 |
-| Aegis + Sentinel Mobile | Dart | 6,798 |
-| **Total** | | **101,596** |
+For the complete component-by-component **Implemented vs. Designed Matrix**, **Fail-Open vs. Fail-Closed Defaults Table**, micro/macro-benchmarks, and twelve operational limitations, see **[`docs/PATH_DEPENDENT_ARCHITECTURE_v3.md`](./PATH_DEPENDENT_ARCHITECTURE_v3.md)** and **[`RELEASE_SCOPE.md`](../RELEASE_SCOPE.md)**.
 
 ---
 
 ## References
 
-- Boston Consulting Group. (2022). Enterprise AI Agent Deployment Report.
-- European Union. (2021). Proposal for a Regulation laying down harmonised rules on Artificial Intelligence (AI Act).
-- Regulation (EU) 2024/1689 — Artificial Intelligence Act.
-- Kaptein, M., Khan, V.-J., & Podstavnychy, A. (2026). Runtime governance for AI agents: Policies on paths. arXiv:2603.16586.
-- Mazzocchetti, A. M. (2026). Cryptographic runtime governance for autonomous AI systems: The Aegis architecture. DOI: 10.2139/ssrn.6418638.
-- DeRudder. (2026). Computable Trust Architecture: A Formal Framework for Runtime AI Governance. DOI: 10.2139/ssrn.6583738.
-- Emerson. (2026). THEMIS-xAI: A Unified Architecture for Explainable AI Governance. DOI: 10.2139/ssrn.6390878.
-- Marín, G. & Chaudhary, J. (2026). Governing What You Cannot Observe: Adaptive Runtime Governance. arXiv:2604.24686.
-- Sawaf, K. (2026). The Discrete Judgment Intermediate: An Externalization Infrastructure for AI Governance. University of Edinburgh Preprint.
-- World Economic Forum. (2025). AI Agents in Action: Foundations for Evaluation and Governance.
-- OWASP. Top 10 for Large Language Model Applications.
-- NIST. AI Risk Management Framework (AI RMF 1.0). NIST AI 100-1.
+- OWASP Foundation. (December 2025). *OWASP Top 10 for Agentic Applications (ASI01–ASI10)*. `https://genai.owasp.org/`
+- National Institute of Standards and Technology (NIST). (17 February 2026). *NIST AI Agent Standards Initiative (CAISI)*.
+- Nasr, M., Carlini, N., Sitawarin, C., et al. (2025). *The Attacker Moves Second: Stronger Adaptive Attacks Bypass Defenses Against LLM Jailbreaks and Prompt Injections*.
+- Debenedetti, E., Shumailov, I., Fan, T., et al. (2025). *Defending LLM Agents against Prompt Injection with CaMeL*. `arXiv:2503.18813`.
+- Meta AI Security. (2025). *The Agents Rule of Two*.
+- Regulation (EU) 2024/1689 & Regulation (EU) 2026/1744 (Digital Omnibus on AI).
+- Kaptein, M., Khan, V.-J., & Podstavnychy, A. (2026). *Runtime governance for AI agents: Policies on paths*. `arXiv:2603.16586`.
+- Mazzocchetti, A. M. (2026). *Cryptographic runtime governance for autonomous AI systems*. `DOI: 10.2139/ssrn.6418638`.
+- DeRudder, J. (2026). *Computable Trust Architecture: A Formal Framework for Runtime AI Governance*. `DOI: 10.2139/ssrn.6418638` / `10.2139/ssrn.6583738`.
+- Emerson, H. (2026). *THEMIS-xAI: A Unified Architecture for Explainable AI Governance*. `DOI: 10.2139/ssrn.6390878`.
+- Marín, G. & Chaudhary, J. (2026). *Governing What You Cannot Observe: Adaptive Runtime Governance*. `arXiv:2604.24686`.
+- Sawaf, K. (2026). *The Discrete Judgment Intermediate: An Externalization Infrastructure for AI Governance*. University of Edinburgh Preprint.
+- NIST. (August 2024). *FIPS 204: Module-Lattice-Based Digital Signature Standard (ML-DSA)*.
+- NIST. (2023). *AI Risk Management Framework (AI RMF 1.0)*. NIST AI 100-1.
 
 ---
 
-*Matthews Enforcement Framework © 2026 Patrick Matthews (Affinity Ops / Affinity Smart AI)*
+*Matthews Enforcement Framework © 2026 Patrick Matthews (Affinity Ops / Affinity Smart AI — `info@affinitysmartai.co.uk`)*
