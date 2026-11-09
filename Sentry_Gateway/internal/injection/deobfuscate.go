@@ -206,24 +206,67 @@ func resegmentCollapsedKeywords(s string) string {
 	return collapsedKeywordRestorer.Replace(strings.ToLower(s))
 }
 
-// MaxDeobfuscationInputBytes bounds the maximum input byte slice processed by
-// extractDecodedPayloads (64 KB) to prevent superlinear CPU/memory expansion on
-// oversized multi-encoded payloads.
+// MaxDeobfuscationInputBytes bounds the maximum window size processed per chunk
+// by extractDecodedPayloads (64 KB) to prevent superlinear CPU/memory expansion
+// on oversized multi-encoded payloads.
 const MaxDeobfuscationInputBytes = 64 * 1024
 
 // MaxBase64CandidateBytes bounds the maximum length of any single Base64 token
 // candidate decoded during deobfuscation (8 KB).
 const MaxBase64CandidateBytes = 8 * 1024
 
+// DeobfuscationWindowStepBytes is the stride between overlapping 64 KB windows
+// (56 KB step with an 8 KB = MaxBase64CandidateBytes overlap) so that no
+// encoded token straddling a 64 KB boundary or located past 64 KB can evade
+// deobfuscation.
+const DeobfuscationWindowStepBytes = MaxDeobfuscationInputBytes - MaxBase64CandidateBytes
+
+// MaxScanBodyBytes is the hard upper bound (1 MB) for inbound/outbound payload
+// scanning. Payloads exceeding this ceiling fail closed in Scan().
+const MaxScanBodyBytes = 1024 * 1024
+
 // extractDecodedPayloads finds Base64, URL-encoded, Hex-escaped, and ROT13
-// segments inside body so the scanner can inspect their decoded plaintext.
+// segments across the full body (using overlapping 64 KB windows with an 8 KB
+// overlap when len(body) > 64 KB) so the scanner can inspect their decoded
+// plaintext without tail-truncation bypasses.
 func extractDecodedPayloads(body string) []struct {
 	encoding string
 	decoded  string
 } {
-	if len(body) > MaxDeobfuscationInputBytes {
-		body = body[:MaxDeobfuscationInputBytes]
+	if len(body) <= MaxDeobfuscationInputBytes {
+		return extractDecodedPayloadsWindow(body)
 	}
+	if len(body) > MaxScanBodyBytes {
+		body = body[:MaxScanBodyBytes]
+	}
+	var all []struct {
+		encoding string
+		decoded  string
+	}
+	seen := make(map[string]bool)
+	for offset := 0; offset < len(body); offset += DeobfuscationWindowStepBytes {
+		end := offset + MaxDeobfuscationInputBytes
+		if end > len(body) {
+			end = len(body)
+		}
+		for _, item := range extractDecodedPayloadsWindow(body[offset:end]) {
+			key := item.encoding + ":" + item.decoded
+			if !seen[key] {
+				seen[key] = true
+				all = append(all, item)
+			}
+		}
+		if end == len(body) {
+			break
+		}
+	}
+	return all
+}
+
+func extractDecodedPayloadsWindow(body string) []struct {
+	encoding string
+	decoded  string
+} {
 	var out []struct {
 		encoding string
 		decoded  string

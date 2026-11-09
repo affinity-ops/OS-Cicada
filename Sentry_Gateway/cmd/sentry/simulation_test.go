@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -388,14 +389,40 @@ func TestHandleSimulatedRequest_SelectiveTaintOnGet(t *testing.T) {
 		t.Fatal("unauthenticated /v1/admin/taint/flush must not clear session taint")
 	}
 
-	// 7. Operator-authenticated POST /v1/admin/taint/flush clears taint and allows subsequent write without CIBA
+	// 7. Cross-tenant isolation: Tenant A cannot flush Tenant B's agent taint (403 Forbidden)
+	agentcache.SetAgent(agentID, agentcache.AgentInfo{TenantID: "tenant-a", AgentType: "general"})
+	defer agentcache.ClearAgent(agentID)
+	otherAgentID := "agent-selective-taint-tenant-b"
+	agentcache.SetAgent(otherAgentID, agentcache.AgentInfo{TenantID: "tenant-b", AgentType: "general"})
+	defer agentcache.ClearAgent(otherAgentID)
+	taint.MarkTainted(ctx, otherAgentID, "https://untrusted-news.example.org/rss", "external_get")
+	defer taint.ClearTaint(ctx, otherAgentID)
+
+	reqCrossTenantFlush := httptest.NewRequest(http.MethodPost, "/v1/admin/taint/flush", strings.NewReader(`{"agent_id":"`+otherAgentID+`"}`))
+	reqCrossTenantFlush.Header.Set("Content-Type", "application/json")
+	reqCrossTenantFlush.Header.Set("X-Gateway-Secret", "test-operator-secret")
+	reqCrossTenantFlush.Header.Set("X-Cicada-Tenant-ID", "tenant-a")
+	recCrossTenantFlush := httptest.NewRecorder()
+	adminFlushHandler.ServeHTTP(recCrossTenantFlush, reqCrossTenantFlush)
+	if recCrossTenantFlush.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 Forbidden on cross-tenant taint flush (tenant-a flushing tenant-b agent), got %d: %s", recCrossTenantFlush.Code, recCrossTenantFlush.Body.String())
+	}
+	if !strings.Contains(recCrossTenantFlush.Body.String(), "cross_tenant_taint_flush_denied") {
+		t.Fatalf("expected cross_tenant_taint_flush_denied error, got: %s", recCrossTenantFlush.Body.String())
+	}
+	if _, tainted := taint.IsTainted(ctx, otherAgentID); !tainted {
+		t.Fatal("cross-tenant flush attempt must leave Tenant B agent taint intact")
+	}
+
+	// 8. Operator-authenticated POST /v1/admin/taint/flush for own tenant (tenant-a) clears taint and allows subsequent write without CIBA
 	reqAuthAdminFlush := httptest.NewRequest(http.MethodPost, "/v1/admin/taint/flush", strings.NewReader(`{"agent_id":"`+agentID+`"}`))
 	reqAuthAdminFlush.Header.Set("Content-Type", "application/json")
 	reqAuthAdminFlush.Header.Set("X-Gateway-Secret", "test-operator-secret")
+	reqAuthAdminFlush.Header.Set("X-Cicada-Tenant-ID", "tenant-a")
 	recAuthAdminFlush := httptest.NewRecorder()
 	adminFlushHandler.ServeHTTP(recAuthAdminFlush, reqAuthAdminFlush)
 	if recAuthAdminFlush.Code != http.StatusOK {
-		t.Fatalf("expected 200 OK on operator-authenticated /v1/admin/taint/flush, got %d: %s", recAuthAdminFlush.Code, recAuthAdminFlush.Body.String())
+		t.Fatalf("expected 200 OK on operator-authenticated /v1/admin/taint/flush for matching tenant, got %d: %s", recAuthAdminFlush.Code, recAuthAdminFlush.Body.String())
 	}
 	if _, tainted := taint.IsTainted(ctx, agentID); tainted {
 		t.Fatal("expected session taint to be cleared after operator-authenticated /v1/admin/taint/flush")
@@ -412,6 +439,14 @@ func TestHandleSimulatedRequest_SelectiveTaintOnGet(t *testing.T) {
 	}
 	if recWriteAfterFlush.Header().Get("X-Cicada-CIBA-Escalated") == "true" {
 		t.Fatal("did not expect CIBA escalation after operator-authenticated taint flush")
+	}
+
+	// 9. Verify newTraceID produces 128-bit CSPRNG UUIDv4 trace IDs matching cascade pattern
+	uuidRe := regexp.MustCompile(`^req-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$`)
+	tid1 := newTraceID("req")
+	tid2 := newTraceID("req")
+	if !uuidRe.MatchString(tid1) || !uuidRe.MatchString(tid2) || tid1 == tid2 {
+		t.Fatalf("expected distinct 128-bit CSPRNG UUIDv4 trace IDs, got %q and %q", tid1, tid2)
 	}
 }
 

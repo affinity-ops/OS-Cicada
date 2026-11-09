@@ -4,9 +4,12 @@
 package main
 
 import (
+	"os"
 	"os/exec"
 	"strings"
 	"testing"
+
+	"github.com/asai/cicada/licensing/internal/crypto"
 )
 
 func buildBinary(t *testing.T) {
@@ -23,6 +26,18 @@ func cleanupBinary() {
 func TestLicenseMintingCLI(t *testing.T) {
 	buildBinary(t)
 	defer cleanupBinary()
+
+	const testKeysPath = "../../master_keys.json"
+	if _, err := os.Stat(testKeysPath); os.IsNotExist(err) {
+		kp, genErr := crypto.GenerateMasterKeys()
+		if genErr != nil {
+			t.Fatalf("Failed to generate temporary master keys for test: %v", genErr)
+		}
+		if saveErr := crypto.SaveMasterKeys(testKeysPath, kp); saveErr != nil {
+			t.Fatalf("Failed to save temporary master keys for test: %v", saveErr)
+		}
+		defer os.Remove(testKeysPath)
+	}
 
 	tests := []struct {
 		name        string

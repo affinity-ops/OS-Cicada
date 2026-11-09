@@ -7,7 +7,9 @@ import (
 	"bytes"
 	"compress/zlib"
 	"context"
+	"crypto/rand"
 	"crypto/sha256"
+	"crypto/subtle"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/hex"
@@ -1980,7 +1982,7 @@ func handleAgentRequest(w http.ResponseWriter, r *http.Request) {
 		).Scan(&swarmScore)
 	}
 
-	traceID := fmt.Sprintf("req-%d", time.Now().UnixNano())
+	traceID := newTraceID("req")
 	targetURL := r.Header.Get("X-Cicada-Target-URL") // Agent declares its intended target
 
 	// ── Tier 1 SSRF Pre-flight check ──────────────────────────────────────────
@@ -2355,7 +2357,7 @@ func handleAgentRequest(w http.ResponseWriter, r *http.Request) {
 	sessionIDHdr := r.Header.Get("X-Cicada-Session-ID")
 	taintScopeKey := taint.ScopeKey(agentID, sessionIDHdr)
 	if r.Header.Get("X-Cicada-Memory-Action") == "flush" {
-		if internalKeyOK(r) {
+		if internalKeyOK(r) || operatorKeyOK(r) {
 			taint.ClearTaint(r.Context(), taintScopeKey)
 			taint.ClearTaint(r.Context(), agentID)
 		} else {
@@ -3695,7 +3697,7 @@ func handleMCPExecution(w http.ResponseWriter, r *http.Request) {
 		if edgeLedger != nil {
 			edgeLedger.AppendRecord(ledger.EventRecord{
 				EventID:     fmt.Sprintf("evt-%d", time.Now().UnixNano()),
-				TraceID:     fmt.Sprintf("mcp-%d", time.Now().UnixNano()),
+				TraceID:     newTraceID("mcp"),
 				AgentID:     target, ActionClass: "mcp:quarantine_agent",
 				Decision:    "allow", ReasonCodes: []string{"aegis_control_plane"},
 				RiskScore:   1.0,
@@ -3951,7 +3953,7 @@ func handleLLMProxy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	traceID := fmt.Sprintf("llm-%d", time.Now().UnixNano())
+	traceID := newTraceID("llm")
 	targetURL := r.Header.Get("X-Cicada-Target-URL")
 	llmKey := r.Header.Get("X-Cicada-LLM-Key")
 
@@ -3999,7 +4001,7 @@ func handleLLMProxy(w http.ResponseWriter, r *http.Request) {
 	sessionIDHdr := r.Header.Get("X-Cicada-Session-ID")
 	taintScopeKey := taint.ScopeKey(agentID, sessionIDHdr)
 	if r.Header.Get("X-Cicada-Memory-Action") == "flush" {
-		if internalKeyOK(r) {
+		if internalKeyOK(r) || operatorKeyOK(r) {
 			taint.ClearTaint(r.Context(), taintScopeKey)
 			taint.ClearTaint(r.Context(), agentID)
 		} else {
@@ -4389,7 +4391,7 @@ func handleSimulatedRequest(w http.ResponseWriter, r *http.Request) {
 	if len(r.RemoteAddr) >= 4 {
 		remotePrefix = hex.EncodeToString([]byte(r.RemoteAddr)[:4])
 	}
-	traceID := fmt.Sprintf("sim-%s-%d", remotePrefix, time.Now().UnixNano())
+	traceID := newTraceID("sim-" + remotePrefix)
 
 	agentID := r.Header.Get("X-Cicada-Agent-ID")
 	if agentID == "" {
@@ -4528,7 +4530,7 @@ func handleSimulatedRequest(w http.ResponseWriter, r *http.Request) {
 	sessionIDHdr := r.Header.Get("X-Cicada-Session-ID")
 	taintScopeKey := taint.ScopeKey(agentID, sessionIDHdr)
 	if r.Header.Get("X-Cicada-Memory-Action") == "flush" {
-		if internalKeyOK(r) {
+		if internalKeyOK(r) || operatorKeyOK(r) {
 			taint.ClearTaint(r.Context(), taintScopeKey)
 			taint.ClearTaint(r.Context(), agentID)
 		} else {
@@ -4872,10 +4874,26 @@ func handleCanaryRevoke(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// newTraceID generates a 128-bit cryptographically random UUIDv4-formatted
+// trace identifier (e.g. "req-xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx") using
+// crypto/rand so that CIBA/HITL approval holds cannot be enumerated or guessed
+// from wall-clock timestamps.
+func newTraceID(prefix string) string {
+	var b [16]byte
+	if _, err := rand.Read(b[:]); err != nil {
+		return fmt.Sprintf("%s-%d", prefix, time.Now().UnixNano())
+	}
+	b[6] = (b[6] & 0x0f) | 0x40
+	b[8] = (b[8] & 0x3f) | 0x80
+	return fmt.Sprintf("%s-%08x-%04x-%04x-%04x-%012x",
+		prefix, b[0:4], b[4:6], b[6:8], b[8:10], b[10:16])
+}
+
 func handleTaintFlush(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		AgentID   string `json:"agent_id"`
 		SessionID string `json:"session_id"`
+		TenantID  string `json:"tenant_id"`
 	}
 	if err := json.NewDecoder(io.LimitReader(r.Body, 64*1024)).Decode(&req); err != nil {
 		writeError(w, `{"error":"invalid JSON payload"}`, http.StatusBadRequest)
@@ -4883,18 +4901,77 @@ func handleTaintFlush(w http.ResponseWriter, r *http.Request) {
 	}
 	req.AgentID = strings.TrimSpace(req.AgentID)
 	req.SessionID = strings.TrimSpace(req.SessionID)
+	req.TenantID = strings.TrimSpace(req.TenantID)
 	if req.AgentID == "" {
 		writeError(w, `{"error":"agent_id is required"}`, http.StatusBadRequest)
 		return
 	}
+
+	// Determine caller authority and tenant binding:
+	// - Portal callers have X-Cicada-Tenant-ID cryptographically pinned by
+	//   requireServiceOrPortal via AuthenticatePortalRequest; any body tenant_id
+	//   is ignored so a portal user can never spoof another tenant.
+	// - Service/operator-key callers (X-Gateway-Secret or X-Operator-Secret) may
+	//   supply the target tenant via X-Cicada-Tenant-ID or JSON tenant_id.
+	isServiceOrOperator := internalKeyOK(r) || operatorKeyOK(r)
+	callerTenantID := strings.TrimSpace(r.Header.Get("X-Cicada-Tenant-ID"))
+	if isServiceOrOperator && callerTenantID == "" {
+		callerTenantID = req.TenantID
+	}
+
+	agentInfo, agentErr := agentcache.GetAgent(r.Context(), req.AgentID)
+	if !isServiceOrOperator {
+		if callerTenantID == "" {
+			writeError(w, `{"error":"tenant context required"}`, http.StatusForbidden)
+			return
+		}
+		if agentErr != nil || agentInfo.TenantID == "" {
+			writeError(w, `{"error":"agent_ownership_unverified"}`, http.StatusForbidden)
+			return
+		}
+		if subtle.ConstantTimeCompare([]byte(agentInfo.TenantID), []byte(callerTenantID)) != 1 {
+			log.Printf("[TAINT-FLUSH] Cross-tenant flush denied: caller_tenant=%s target_agent=%s agent_tenant=%s",
+				callerTenantID, req.AgentID, agentInfo.TenantID)
+			writeError(w, `{"error":"cross_tenant_taint_flush_denied"}`, http.StatusForbidden)
+			return
+		}
+	} else if callerTenantID != "" {
+		// Service/operator caller supplied an explicit tenant scope: enforce ownership fail-closed.
+		if agentErr != nil || agentInfo.TenantID == "" {
+			writeError(w, `{"error":"agent_ownership_unverified"}`, http.StatusForbidden)
+			return
+		}
+		if subtle.ConstantTimeCompare([]byte(agentInfo.TenantID), []byte(callerTenantID)) != 1 {
+			log.Printf("[TAINT-FLUSH] Cross-tenant operator flush denied: caller_tenant=%s target_agent=%s agent_tenant=%s",
+				callerTenantID, req.AgentID, agentInfo.TenantID)
+			writeError(w, `{"error":"cross_tenant_taint_flush_denied"}`, http.StatusForbidden)
+			return
+		}
+	} else if agentErr == nil && agentInfo.TenantID != "" {
+		callerTenantID = agentInfo.TenantID
+	}
+
 	scopeKey := taint.ScopeKey(req.AgentID, req.SessionID)
 	taint.ClearTaint(r.Context(), scopeKey)
 	if req.SessionID == "" {
 		taint.ClearTaint(r.Context(), req.AgentID)
 	}
+	if edgeLedger != nil {
+		edgeLedger.AppendRecord(ledger.EventRecord{
+			EventID:     fmt.Sprintf("evt-%d", time.Now().UnixNano()),
+			TraceID:     newTraceID("flush"),
+			TenantID:    callerTenantID,
+			AgentID:     req.AgentID,
+			ActionClass: "taint_flush",
+			Decision:    "flushed",
+			ReasonCodes: []string{"operator_taint_flush"},
+			RiskScore:   0.0,
+		})
+	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"status":     "flushed",
 		"agent_id":   req.AgentID,
+		"tenant_id":  callerTenantID,
 		"session_id": req.SessionID,
 		"scope_key":  scopeKey,
 	})

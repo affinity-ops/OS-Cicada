@@ -288,6 +288,17 @@ func Scan(body string, role string) Result {
 	if len(body) == 0 {
 		return Result{}
 	}
+	if len(body) > MaxScanBodyBytes {
+		return Result{
+			Block: true,
+			Findings: []Finding{{
+				Pattern:  "payload exceeds maximum deobfuscation scan size (1 MB)",
+				Severity: SeverityCritical,
+				Excerpt:  "oversized payload rejected fail-closed",
+			}},
+			Score: 1.0,
+		}
+	}
 
 	// ── SLM Fast Path ────────────────────────────────────────────────────────
 	// If the distilled SLM classifier is enabled, run it first. A high-confidence

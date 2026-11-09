@@ -229,6 +229,19 @@ func jitteredTTL() time.Duration {
 	return result
 }
 
+var memAgents sync.Map // map[string]AgentInfo
+
+// SetAgent seeds an in-memory agent metadata record (used in standalone
+// mode and handler-level integration tests when Redis/PostgreSQL are absent).
+func SetAgent(agentID string, info AgentInfo) {
+	memAgents.Store(agentID, info)
+}
+
+// ClearAgent removes an in-memory agent metadata entry.
+func ClearAgent(agentID string) {
+	memAgents.Delete(agentID)
+}
+
 // GetAgent retrieves agent metadata from Redis. On cache miss, it queries
 // PostgreSQL, populates the cache, and returns the result.
 //
@@ -238,6 +251,10 @@ func GetAgent(ctx context.Context, agentID string) (AgentInfo, error) {
 	var info AgentInfo
 	start := time.Now()
 	totalRequests.Add(1)
+
+	if v, ok := memAgents.Load(agentID); ok {
+		return v.(AgentInfo), nil
+	}
 
 	// ── Try Redis first ──────────────────────────────────────────────────
 	if queue.Client != nil {

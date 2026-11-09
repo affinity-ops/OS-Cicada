@@ -19,8 +19,8 @@ identifiers:
     value: "10.2139/ssrn.6898119"
     description: "SSRN Preprint DOI (June 2026 Version 2)"
 license: Apache-2.0
-version: "1.0.4"
-date-released: "2026-11-08"
+version: "1.0.5"
+date-released: "2026-11-09"
 keywords:
   - ai-agents
   - zero-trust
@@ -32,7 +32,7 @@ keywords:
   - runtime-security
 preferred-citation:
   type: article
-  title: "A Path-Dependent, Multi-Layered Architecture for Runtime Governance and Post-Quantum Cryptographic Assurance of Autonomous AI Agents (Version 3)"
+  title: "A Path-Dependent, Multi-Layered Architecture for Runtime Governance and Post-Quantum Cryptographic Assurance of Autonomous AI Agents (Version 3.2)"
   authors:
     - given-names: Patrick
       family-names: Matthews

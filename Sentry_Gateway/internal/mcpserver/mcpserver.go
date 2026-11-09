@@ -53,6 +53,11 @@ import (
 	"os"
 	"strings"
 	"time"
+
+	"github.com/asai/cicada/sentry/internal/agentcache"
+	"github.com/asai/cicada/sentry/internal/pipeline"
+	"github.com/asai/cicada/sentry/internal/prerequisite"
+	"github.com/asai/cicada/sentry/internal/store"
 )
 
 // ── JSON-RPC 2.0 wire types ────────────────────────────────────────────────────
@@ -347,7 +352,7 @@ func Handler() http.HandlerFunc {
 			writeResult(w, req.ID, map[string]interface{}{"tools": allTools})
 
 		case "tools/call":
-			handleToolCall(w, r.Context(), req)
+			handleToolCall(w, r, req)
 
 		case "ping":
 			writeResult(w, req.ID, map[string]string{"status": "pong"})
@@ -360,7 +365,17 @@ func Handler() http.HandlerFunc {
 
 // ── Tool dispatch ──────────────────────────────────────────────────────────────
 
-func handleToolCall(w http.ResponseWriter, ctx context.Context, req Request) {
+func isReadOnlyMCPTool(name string) bool {
+	switch name {
+	case "get_threat_signals", "get_agent_velocity", "list_quarantined", "get_agent", "get_tenant":
+		return true
+	default:
+		return false
+	}
+}
+
+func handleToolCall(w http.ResponseWriter, r *http.Request, req Request) {
+	ctx := r.Context()
 	var params struct {
 		Name      string                 `json:"name"`
 		Arguments map[string]interface{} `json:"arguments"`
@@ -372,8 +387,53 @@ func handleToolCall(w http.ResponseWriter, ctx context.Context, req Request) {
 
 	log.Printf("[MCP] Tool call: %s args=%v", params.Name, params.Arguments)
 
-	// Server-side human approval for privileged control tools (approval.go).
-	if IsGatedTool(params.Name) {
+	// Unified 9-Layer Admission Pipeline evaluation before tool dispatch.
+	mcpCallerAgent := strings.TrimSpace(r.Header.Get("X-Cicada-Agent-ID"))
+	if mcpCallerAgent == "" {
+		mcpCallerAgent = "aegis-mcp-caller"
+	}
+	targetURL := r.Header.Get("X-Cicada-Target-URL")
+	mcpTools, mcpToolsErr := agentcache.GetTools(ctx, mcpCallerAgent)
+	mcpResolvedTool, mcpPrereqMap, mcpScopeMap := agentcache.ResolveToolForRequest(
+		mcpTools,
+		params.Name,
+		targetURL,
+		r.Method,
+	)
+	if mcpToolsErr != nil && store.DB != nil && os.Getenv("CICADA_FAIL_CLOSED") != "false" {
+		mcpPrereqMap = map[string]string{"__manifest_unavailable__": "__lookup_failed__"}
+		mcpResolvedTool = ""
+	}
+	mcpPipeRes := pipeline.Evaluate(ctx, pipeline.Request{
+		AgentID:         mcpCallerAgent,
+		TenantID:        r.Header.Get("X-Cicada-Tenant-ID"),
+		SessionID:       r.Header.Get("X-Cicada-Session-ID"),
+		HTTPMethod:      r.Method,
+		TargetURL:       targetURL,
+		Body:            string(req.Params),
+		Provenance:      r.Header.Get("X-Cicada-Content-Provenance"),
+		ToolID:          mcpResolvedTool,
+		PrerequisiteMap: mcpPrereqMap,
+		LedgerCheckFn: func(reqTool string) bool {
+			if reqTool == "__lookup_failed__" {
+				return false
+			}
+			done, _ := prerequisite.HasCompletedPrerequisite(ctx, mcpCallerAgent, reqTool)
+			return done
+		},
+		ToolScopeMap: mcpScopeMap,
+	})
+	if !mcpPipeRes.Admitted {
+		log.Printf("[MCP PIPELINE] Tool %s blocked by %s: %s", params.Name, mcpPipeRes.BlockedBy, mcpPipeRes.BlockReason)
+		writeError(w, req.ID, errInvalidRequest, fmt.Sprintf("blocked by %s: %s", mcpPipeRes.BlockedBy, mcpPipeRes.BlockReason))
+		return
+	}
+	if mcpResolvedTool != "" {
+		prerequisite.RecordCompletedTool(ctx, mcpCallerAgent, mcpResolvedTool)
+	}
+
+	// Server-side human approval for privileged control tools or Rule-of-Two CIBA escalation (approval.go).
+	if IsGatedTool(params.Name) || (mcpPipeRes.ForceCIBA && !isReadOnlyMCPTool(params.Name)) {
 		pendingID, refusal := checkApproval(params.Name, params.Arguments)
 		if refusal != "" {
 			log.Printf("[MCP CONTROL] %s refused: %s", params.Name, refusal)
